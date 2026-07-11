@@ -455,8 +455,6 @@ header{position:sticky;top:0;z-index:30;background:rgba(250,246,238,.92);backdro
 .t-toggle{display:flex;gap:5px;margin-bottom:16px;}
 .t-toggle button{flex:1;min-width:0;padding:10px 4px;border:1.5px solid var(--line);background:#fff;border-radius:10px;font-weight:800;font-size:.72rem;line-height:1.15;color:var(--ink-soft);font-family:inherit;white-space:nowrap;}
 .t-toggle button.on{background:var(--navy);color:#fff;border-color:var(--navy);}
-.sa-maintabs button{border:1.5px solid var(--honey);background:var(--honey-tint);color:var(--navy);}
-.sa-maintabs button.on{background:var(--navy);color:#fff;border-color:var(--navy);}
 .reg-row{display:flex;flex-direction:column;gap:9px;padding:12px;border:1.5px solid var(--line);border-radius:12px;margin-bottom:9px;background:#fff;}
 .reg-info{display:flex;flex-direction:column;gap:3px;}
 .reg-info b{font-size:.92rem;color:var(--navy);}
@@ -2256,7 +2254,7 @@ async function openSuperadmin(okMsg,errMsg){
   saRenderLista(okMsg,errMsg);
 }
 function saShell(inner){
-  return `<div class="t-toggle sa-maintabs" style="margin:8px 0 16px;display:flex;gap:6px;flex-wrap:wrap">
+  return `<div class="t-toggle" style="margin:8px 0 16px;display:flex;gap:6px;flex-wrap:wrap">
       <button class="${saMainTab==='ev'?'on':''}" onclick="saSetMain('ev')">📚 EvaluaTest</button>
       <button class="${saMainTab==='aa'?'on':''}" onclick="saSetMain('aa')">🎨 Aula Abierta</button>
       <button class="${saMainTab==='fact'?'on':''}" onclick="saSetMain('fact')">💶 Facturación</button>
@@ -2282,7 +2280,7 @@ function saRenderLista(okMsg,errMsg){
     const rev = a.activa===false;
     h+=`<div class="sa-card${rev?' rev':''}" data-acad="${a.academia_id}" style="${rev?'opacity:.72':''}">
       <div class="sa-card-top"><b>${escHtml(a.nombre)}${rev?' <span style=\"color:#b4232a;font-size:.7rem;font-weight:800\">🔒 REVOCADA</span>':''}</b><span class="sa-id">#${a.academia_id}</span></div>
-      <div class="sa-counts"><span>${a.n_profes} profes</span><span>${a.n_alumnos} alumnos</span><span>${a.n_examenes} exs</span></div>
+      <div class="sa-counts" style="display:none"><span>${a.n_profes} profes</span><span>${a.n_alumnos} alumnos</span><span>${a.n_examenes} exs</span></div>
       <span class="sa-open">Ver / gestionar →</span>
     </div>`;
   });
