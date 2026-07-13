@@ -914,6 +914,25 @@ select option{color:var(--navy);padding:8px;}
 /* Descargas PDF/CSV en una sola fila compacta */
 .dl-row{display:flex;gap:8px;margin-bottom:14px;}
 .dl-row .btn{flex:1;margin:0;font-size:.74rem;padding:10px 6px;white-space:nowrap;}
+
+/* ---- ca4 · exámenes que cuentan para la nota final: remarcados en ROJO ---- */
+.exam-row.ef{border-left:4px solid #d92d20;}
+.ef-badge{display:inline-block;background:#fde7e7;color:#b4232a;font-weight:800;font-size:.58rem;
+  text-transform:uppercase;letter-spacing:.4px;border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:middle;}
+
+/* ---- ca1 · ca5 · aprovechar el ancho en PC en el panel del profesor ---- */
+@media(min-width:860px){ .wrap{max-width:1200px;} }
+@media(min-width:1280px){ .wrap{max-width:1320px;} }
+
+/* ---- ca3 · pantalla de examen del alumno en PC: 2 columnas ---- */
+/* En móvil .exam-body/.exam-left/.exam-right son divs normales (apilan igual que antes). */
+@media(min-width:860px){
+  .exam-body{display:grid;grid-template-columns:1fr 300px;gap:26px;align-items:start;}
+  .exam-right{position:sticky;top:20px;}
+  .exam-right .qgrid{grid-template-columns:repeat(6,1fr);gap:6px;margin:0;}
+  .exam-right .qgrid .gc{font-size:.74rem;border-radius:7px;}
+  .exam-right .bar{position:static;background:none;padding:0;margin-top:14px;}
+}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -1150,8 +1169,16 @@ function volverPortal(){
   showMsg($('loginMsg'),'');
 }
 
-// Arrancar el portal al cargar la página
-window.addEventListener('DOMContentLoaded', loadPortal);
+// Arrancar el portal al cargar la página (y restaurar sesión si la había)
+window.addEventListener('DOMContentLoaded', async ()=>{
+  let hasSess=false; try{ hasSess=!!JSON.parse(localStorage.getItem(_SESS_KEY)||'null'); }catch(e){}
+  await loadPortal();
+  if(hasSess){
+    $('portal').classList.add('hidden');
+    const ok=await restaurarSesion();
+    if(!ok){ $('portal').classList.remove('hidden'); }
+  }
+});
 
 // ── Aula Abierta · mercado independiente (materias propias / exámenes libres) ──
 // Arranca con UNA materia de ejemplo ("aula-materia-1") para que "Crear exámenes"
@@ -1464,9 +1491,39 @@ async function renovarSesion(){
     });
     if(!r.ok) return false;
     const d = await r.json();
-    if(d && d.access_token){ token=d.access_token; if(d.refresh_token) refreshToken=d.refresh_token; return true; }
+    if(d && d.access_token){ token=d.access_token; if(d.refresh_token) refreshToken=d.refresh_token; guardarSesion(); return true; }
     return false;
   }catch(e){ return false; }
+}
+// ── Sesión persistente: al refrescar la página no se pierde el login ──
+const _SESS_KEY='et_sess_v1';
+function guardarSesion(){
+  try{
+    if(!refreshToken || window._saImpersona || window._aulaAbiertaDemo) return;
+    localStorage.setItem(_SESS_KEY, JSON.stringify({
+      rt:refreshToken, email:userEmail,
+      cert:window._activeCertId||null, cod:window._certCodigo||'', nom:window._certNombre||''
+    }));
+  }catch(e){}
+}
+function limpiarSesion(){ try{ localStorage.removeItem(_SESS_KEY); }catch(e){} }
+async function restaurarSesion(){
+  let s=null; try{ s=JSON.parse(localStorage.getItem(_SESS_KEY)||'null'); }catch(e){}
+  if(!s || !s.rt) return false;
+  refreshToken=s.rt; userEmail=s.email||'';
+  window._activeCertId=s.cert||null; window._certCodigo=s.cod||''; window._certNombre=s.nom||'';
+  if(window._activeCertId==='__aula_abierta'){ $('login').classList.add('aula-celeste'); }
+  const ok=await renovarSesion();
+  if(!ok){ refreshToken=null; limpiarSesion(); return false; }
+  try{
+    await gateAccess();
+    $('portal').classList.add('hidden');
+    $('login').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    sbRender();
+    await loadData();
+    return true;
+  }catch(e){ token=null; refreshToken=null; limpiarSesion(); return false; }
 }
 function showMsg(el, text, kind='err'){ el.innerHTML = text ? `<div class="banner ${kind}">${text}</div>` : ''; }
 function wireEye(eyeId, inputId){
@@ -1532,6 +1589,7 @@ async function doLogin(){
     await gateAccess();
     $('login').classList.add('hidden'); $('app').classList.remove('hidden');
     sbRender();
+    guardarSesion();
     await loadData();
   }catch(err){
     let m=err.message||'No se pudo entrar.';
@@ -1564,6 +1622,7 @@ async function doSignup(){
       await gateAccess();
       $('login').classList.add('hidden'); $('app').classList.remove('hidden');
       sbRender();
+      guardarSesion();
       await loadData();
     }else{
       showMsg($('loginMsg'),'Cuenta creada. Revisa tu correo para confirmarla y luego entra.','ok');
@@ -1835,6 +1894,7 @@ function applyTema(certId){
 }
 
 function logout(){
+  limpiarSesion();
   token=null; refreshToken=null; userEmail=''; userName=''; userRol=''; userId=''; userAcademia=null; userProfesorId=null; unidadesById={}; examsByUnit={}; attemptsByExam={}; falladasByUnit={}; entregasByExam={};
   window._saImpersona=false; window._saImpersonaProf=null; window._saImpersonaAcademia=null;
   window._activeCertId=null; window._certCodigo=''; window._certNombre=''; window._aulaAbiertaDemo=false;
@@ -2094,9 +2154,18 @@ async function openTeacher(){
       const email=(pipe>=0 ? raw.slice(pipe+1) : raw).toLowerCase().trim();
       return {...r, alumno_email:email, alumno:email, _nombre:nombre};
     })
-    // Cinturón de seguridad: por si el RPC no filtra bien por certificado en el
-    // servidor, descartamos aquí cualquier intento cuya unidad no sea de este cert.
-    .filter(r=>!r.unidad || unidadEnCert(r.unidad));
+    // Cinturón de seguridad ESTANCO: por si el RPC no filtra bien en el servidor.
+    // 1) sin unidad => fuera (antes se colaban y arrastraban alumnos de otro cert).
+    // 2) AA solo admite unidades 'aula-*'; EV nunca admite 'aula-*'.
+    // 3) además la unidad debe pertenecer al certificado/materias activas.
+    .filter(r=>{
+      const u=String(r.unidad||'');
+      if(!u) return false;
+      const rowEsAula = u.indexOf('aula-')===0;
+      const esAA = window._activeCertId==='__aula_abierta';
+      if(esAA!==rowEsAula) return false;
+      return unidadEnCert(u);
+    });
     const emailsDelCert=new Set(teacherRows.map(r=>r.alumno_email));
     resumenRows=(res||[]).map(x=>{
       const email=((x.email||x.alumno||'')+'').toLowerCase().trim();
@@ -4140,8 +4209,24 @@ function listadoBody(okMsg){
       return {alumno:a.email,nombre:a.nombre,media_clase:mcv,media_final:mfv,intentos:ni};
     }).filter(a=>a.intentos>0);
   }
-  else if(resumenRows){ alum=resumenRows.slice(); }
-  else{ const byAl={}, byNombre={}; teacherRows.forEach(r=>{ byAl[r.alumno]=(byAl[r.alumno]||0)+1; if(r._nombre) byNombre[r.alumno]=r._nombre; }); alum=Object.keys(byAl).map(e=>({alumno:e,nombre:byNombre[e]||null,media_clase:null,media_final:null,intentos:byAl[e]})); }
+  else{
+    // "Todas": medias calculadas en cliente desde teacherRows con el criterio
+    // unificado (igual que la ficha del alumno y que lo que ve el propio alumno).
+    // Así el profesor y el alumno ven lo mismo, y al borrar un examen que contaba
+    // para la nota final deja de sumar al instante (ya no está en examsByUnit).
+    const porAlumno={};
+    teacherRows.forEach(r=>{
+      const e=(r.alumno_email||r.alumno||'').toLowerCase(); if(!e) return;
+      (porAlumno[e]=porAlumno[e]||{email:e,nombre:r._nombre||null,rows:[]}).rows.push(r);
+      if(r._nombre) porAlumno[e].nombre=r._nombre;
+    });
+    alum=Object.values(porAlumno).map(a=>({
+      alumno:a.email, nombre:a.nombre,
+      media_clase:mediaPorUnidad(a.rows,null),
+      media_final:mediaFinalPorUnidad(a.rows,null),
+      intentos:a.rows.filter(r=>!esIntentoFantasma(r)).length
+    })).filter(a=>a.intentos>0);
+  }
 
   // Orden fijo: ranking por nota de clase (mejor primero); empates, por nombre.
   alum.sort((a,b)=>{
@@ -4599,17 +4684,41 @@ function openMisResultados(unitId, head){
   }
 }
 
-async function abrirIntentoAlumno(id,unitId){
+function verIntentoAlumno(examId, unitId){
+  const at=attemptsByExam[examId];
+  const all=[].concat(...Object.values(examsByUnit));
+  const ex=all.find(e=>String(e.id)===String(examId));
+  if(at && at.id){ abrirIntentoAlumno(at.id, unitId, ex&&ex.titulo); }
+  else{ openExam(examId); }
+}
+function pdfDesdeIntento(it, ex, unitId){
+  current.lastR={correctas:it.correctas,total:it.total,incorrectas:it.incorrectas,en_blanco:it.en_blanco,
+    porcentaje: it.total?Math.round(it.correctas/it.total*100):0,
+    apto: it.total>0 && it.correctas/it.total>=0.5, codigo:it.codigo,
+    detalle:(it.detalle||[]).map((q,idx)=>({...q, pregunta_id:'i'+idx}))};
+  current.lastFecha=it.creado_en?new Date(it.creado_en):new Date();
+  current.optOrder={};
+  current.unit=unitId;
+  current.exam={titulo:(ex&&ex.titulo)||'Examen', tema:(unidadesById[unitId]&&unidadesById[unitId].codigo)||''};
+  generarPDF();
+}
+async function abrirIntentoAlumno(id,unitId,titulo){
   if(!id){ appAlert('No hay detalle disponible para este intento.'); return; }
   const backFn=`openUnit('${unitId.replace(/'/g,"\\'")}')`;
   showView('unit'); window.scrollTo(0,0);
   $('unit').innerHTML=`<button class="backbtn" onclick="${backFn}">← Volver</button><div class="loader"><span class="spin"></span></div>`;
   try{
-    const rows=await call(`/rest/v1/intentos?id=eq.${id}&select=detalle,correctas,incorrectas,en_blanco,total,codigo,creado_en`);
+    const rows=await call(`/rest/v1/intentos?id=eq.${id}&select=examen_id,detalle,correctas,incorrectas,en_blanco,total,codigo,creado_en`);
     const it=rows&&rows[0]; if(!it) throw new Error('No encontrado.');
+    const _all=[].concat(...Object.values(examsByUnit));
+    const _ex=_all.find(e=>String(e.id)===String(it.examen_id));
+    const _tit=titulo||(_ex&&_ex.titulo)||'Examen';
+    window._intActual={it,ex:_ex,unitId};
     const pct=it.total?Math.round(it.correctas/it.total*100):0;
     const pass=it.total>0&&it.correctas/it.total>=0.5;
     let html=`<button class="backbtn" onclick="${backFn}">← Volver</button>
+      <h1 style="font-size:1.05rem;font-weight:800;letter-spacing:-.3px;margin:8px 0 4px;color:var(--navy)">${escHtml(_tit)}</h1>
+      <p style="font-size:.76rem;color:var(--ink-soft);margin-bottom:10px">Examen corregido</p>
       <div class="result" style="text-align:left;padding:18px 16px">
         <div style="display:flex;align-items:center;gap:11px;margin-top:11px;flex-wrap:wrap">
           <span class="score" style="font-size:1.9rem">${it.correctas}/${it.total}</span>
@@ -4624,8 +4733,13 @@ async function abrirIntentoAlumno(id,unitId){
       if(q.explicacion) html+=`<div class="expl">${q.explicacion}</div>`;
       html+=`</div>`;
     });
-    html+=`<div class="bar"><button class="btn btn-ghost" onclick="${backFn}">← Volver</button></div>`;
+    html+=`<div class="bar">
+      <button class="btn btn-download" id="int-pdf">⬇ Descargar PDF del examen corregido</button>
+      ${(_ex && !_ex.cuenta_final)?`<button class="btn btn-primary" style="margin-top:9px" onclick="openExam('${String(it.examen_id).replace(/'/g,"\\'")}')">Repetir examen</button>`:''}
+      <button class="btn btn-ghost" style="margin-top:9px" onclick="${backFn}">← Volver a exámenes</button>
+    </div>`;
     $('unit').innerHTML=html;
+    const _pb=$('int-pdf'); if(_pb) _pb.onclick=()=>pdfDesdeIntento(it,_ex,unitId);
   }catch(err){
     $('unit').innerHTML=`<button class="backbtn" onclick="${backFn}">← Volver</button><div class="center-msg">No se pudo abrir.<br><small>${err.message||''}</small></div>`;
   }
@@ -4686,9 +4800,9 @@ function openUnit(unitId){
         avgLabel = pct+'%';
         subTxt = `Media clase · ${st.alumnos} alumno${st.alumnos!==1?'s':''} · ${st.intentos} intento${st.intentos!==1?'s':''}`;
       }
-      html+=`<button class="exam-row ${cellCls}" data-id="${e.id}">
+      html+=`<button class="exam-row ${cellCls}${e.cuenta_final?' ef':''}" data-id="${e.id}">
           <span class="cell-avg">${avgLabel}</span>
-          <span class="meta"><span class="et">${escHtml(e.titulo)}${oc}</span>
+          <span class="meta"><span class="et">${escHtml(e.titulo)}${e.cuenta_final?' <span class="ef-badge">Nota final</span>':''}${oc}</span>
           <span class="es avg-sub">${subTxt}</span></span>
           <span class="arrow">›</span></button>`;
     });
@@ -4741,16 +4855,16 @@ function openUnit(unitId){
       const tot=at.total, pct=Math.round(at.mejor/tot*100), pass=pct>=50;
       const nInt=at.count;
       const temaCorto=(e.tema||'').split(' · ')[0];
-      html+=`<button class="exam-row done${pass?'':' fail'}" data-id="${e.id}">
+      html+=`<button class="exam-row done${pass?'':' fail'}${e.cuenta_final?' ef':''}" data-id="${e.id}"${(!e.cuenta_final && at.id)?' data-done="1"':''}>
           <span class="cell">${at.mejor}/${tot}</span>
-          <span class="meta"><span class="et">${e.titulo}</span><span class="es">${temaCorto?temaCorto+' · ':''}${pct}% · ${nInt} ${nInt===1?'intento':'intentos'}</span></span>
+          <span class="meta"><span class="et">${e.titulo}${e.cuenta_final?' <span class="ef-badge">Nota final</span>':''}</span><span class="es">${temaCorto?temaCorto+' · ':''}${pct}% · ${nInt} ${nInt===1?'intento':'intentos'}</span></span>
           <span class="res ${pass?'ok':'no'}">${pass?'✓ Apto':'✗ No apto'}</span>
           <span class="arrow">›</span></button>`;
     }else{
       const numCell=e.numero||(((e.titulo||'').match(/\d+/)||[])[0])||'·';
-      html+=`<button class="exam-row" data-id="${e.id}">
+      html+=`<button class="exam-row${e.cuenta_final?' ef':''}" data-id="${e.id}">
           <span class="cell">${numCell}</span>
-          <span class="meta"><span class="et">${e.titulo}</span><span class="es">${e.tema||''}</span></span>
+          <span class="meta"><span class="et">${e.titulo}${e.cuenta_final?' <span class="ef-badge">Nota final</span>':''}</span><span class="es">${e.tema||''}</span></span>
           <span class="arrow">›</span></button>`;
     }
   });
@@ -4800,7 +4914,7 @@ function openUnit(unitId){
     html+=`</div>`;
   }
   $('unit').innerHTML=html;
-  document.querySelectorAll('.exam-row[data-id]').forEach(b=> b.onclick=()=>openExam(b.dataset.id));
+  document.querySelectorAll('.exam-row[data-id]').forEach(b=> b.onclick=()=> b.dataset.done==='1' ? verIntentoAlumno(b.dataset.id, unitId) : openExam(b.dataset.id));
   document.querySelectorAll('.exam-row[data-red]').forEach(b=> b.onclick=()=>openRedaccion(b.dataset.red));
   if($('btn-megatest')) $('btn-megatest').onclick=()=>openMegatest(unitId,1);
   if($('btn-megatest2')) $('btn-megatest2').onclick=()=>openMegatest(unitId,2);
@@ -4875,12 +4989,23 @@ function openExamProfesor(examId, unitId){
           <span>${a.intentos} intento${a.intentos!==1?'s':''}</span>
         </div>
         <span class="aer-pct ${cls}">${pct}%</span>
+        ${ex.cuenta_final?`<button class="sa-mini" data-reab="${escAttr(a.email)}" data-reabn="${escAttr(a.nombre||a.email)}" title="Reabrir: borra su intento y le da otra oportunidad" style="margin-left:8px;background:#fff7e6;color:#b26a00;border:1px solid #f0d9a8">↻</button>`:''}
       </div>`;
     });
   }
   $('unit').innerHTML=html;
   const pvBtn=$('btn-pv-preguntas');
   if(pvBtn) pvBtn.onclick=()=>togglePreviewPreguntas(examId);
+  $('unit').querySelectorAll('[data-reab]').forEach(b=> b.onclick=()=>reabrirIntentoAlumnoUI(examId, b.dataset.reab, b.dataset.reabn, unitId));
+}
+async function reabrirIntentoAlumnoUI(examId, email, nombre, unitId){
+  if(!await appConfirm('¿Reabrir el examen para '+(nombre||email)+'?\n\nSe borrarán sus intentos de este examen y podrá volver a hacerlo una vez.')) return;
+  try{
+    await call('/rest/v1/rpc/reabrir_intento',{method:'POST',body:{p_examen_id:examId, p_alumno_email:email}});
+    await openTeacher();
+    openExamProfesor(examId, unitId);
+    appAlert('Hecho. '+(nombre||email)+' puede repetir el examen.');
+  }catch(err){ appAlert('No se pudo reabrir: '+(err.message||'')); }
 }
 
 // ---- Vista previa de preguntas del examen (solo profesor) ----
@@ -5132,7 +5257,8 @@ function renderExamenBloqueado(examId, at){
     </div>
 
     <div class="bar">
-      <button class="btn btn-ghost" onclick="backToUnit()">← Volver a los exámenes</button>
+      ${at && at.id ? `<button class="btn btn-download" onclick="verIntentoAlumno('${String(examId).replace(/'/g,"\\'")}','${current.unit?String(current.unit).replace(/'/g,"\\'"):''}')">⬇ Ver / descargar mi examen corregido</button>` : ''}
+      <button class="btn btn-ghost" style="margin-top:9px" onclick="backToUnit()">← Volver a los exámenes</button>
     </div>`;
 }
 // Pantalla-puerta: instrucciones y "contrato" del examen oficial. El alumno debe
@@ -5242,6 +5368,7 @@ function renderExam(){
     <h1 style="font-size:1.05rem;font-weight:800;letter-spacing:-.3px;margin:8px 0 2px;color:var(--navy)">${current.exam.titulo}</h1>
     ${esParaNota?`<div style="background:#fff4e2;border:1px solid #f0d9b3;border-radius:8px;padding:7px 12px;font-size:.76rem;color:#92400e;margin-bottom:6px;font-weight:600">⚠️ Examen oficial · No salgas de esta pantalla hasta corregir</div>`:''}
     <p style="font-size:.78rem;color:var(--ink-soft);margin-bottom:10px">${n} preguntas · Aprobado al 50%</p>
+    <div class="exam-body"><div class="exam-left">
     <div class="qcard">
       ${tema?`<span class="tema-chip">${tema}</span>`:''}
       <div class="qnum">Pregunta ${i+1}</div>
@@ -5258,6 +5385,7 @@ function renderExam(){
       <span class="nav-count">Pregunta ${i+1} de ${n}</span>
       <button class="nav-b" id="nextB" ${i===n-1?'disabled':''}>Siguiente →</button>
     </div>
+    </div><div class="exam-right">
     <div class="qgrid">`;
   current.preguntas.forEach((qq,k)=>{
     const ans=current.respuestas[qq.id]!==undefined?' ans':'';
@@ -5270,7 +5398,8 @@ function renderExam(){
       ${esParaNota
         ? `<button class="btn btn-ghost" style="margin-top:9px;opacity:.5" onclick="intentarSalirExamen()">← Salir del examen</button>`
         : `<button class="btn btn-ghost" style="margin-top:9px" onclick="backToUnit()">← Volver al menú</button>`}
-    </div>`;
+    </div>
+    </div></div>`;
   $('exam').innerHTML=html;
   $('exam').querySelectorAll('.opt').forEach(o=>{
     o.onclick=()=>{ const q=o.dataset.q, i=+o.dataset.i; if(current.respuestas[q]===i){ delete current.respuestas[q]; } else { current.respuestas[q]=i; } renderExam(); };
