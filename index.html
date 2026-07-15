@@ -1568,7 +1568,20 @@ function guardarSesion(){
     }));
   }catch(e){}
 }
-function limpiarSesion(){ try{ localStorage.removeItem(_SESS_KEY); }catch(e){} }
+function limpiarSesion(){ try{ localStorage.removeItem(_SESS_KEY); localStorage.removeItem(_PANEL_KEY); }catch(e){} }
+// Estado del panel de superadmin (pestaña y subpestaña abiertas): así al refrescar
+// la página no te devuelve siempre a la lista de academias.
+const _PANEL_KEY='apt_panel_v1';
+function guardarPanel(){
+  try{
+    if(userEmail!=='admin@evaluatest.com' || window._saImpersona) return;
+    localStorage.setItem(_PANEL_KEY, JSON.stringify({
+      main:saMainTab||'ev', fsub:window._factSub||null, gtab:gxTab||'facturas',
+      rsub:window._rsSub||null, rtab:rsTab||'redactor'
+    }));
+  }catch(e){}
+}
+function leerPanel(){ try{ return JSON.parse(localStorage.getItem(_PANEL_KEY)||'null'); }catch(e){ return null; } }
 async function restaurarSesion(){
   let s=null; try{ s=JSON.parse(localStorage.getItem(_SESS_KEY)||'null'); }catch(e){}
   if(!s || !s.rt) return false;
@@ -2400,7 +2413,7 @@ function saSetTab(t){ saTab=t; saDetalle(); }
 function saSetMain(t){
   if(t==='fact') window._factSub=null;
   if(t==='rs') window._rsSub=null;
-  saMainTab=t; saSelAcad=null;
+  saMainTab=t; saSelAcad=null; guardarPanel();
   // Si ya tenemos los datos cargados, pintar directo (no re-consultar: evitaba
   // que la vista se quedara colgada en el spinner esperando a Supabase).
   if(saAcademias && saAcademias.length){ showView('teacher'); teacherView='superadmin'; window.scrollTo(0,0); saRenderLista(); return; }
@@ -2409,6 +2422,15 @@ function saSetMain(t){
 async function openSuperadmin(okMsg,errMsg){
   showView('teacher'); window.scrollTo(0,0);
   teacherView='superadmin';
+  // Al recargar la página, volver a la pestaña donde estabas.
+  if(!window._panelRestaurado){
+    window._panelRestaurado=true;
+    const p=leerPanel();
+    if(p){
+      saMainTab=p.main||'ev'; window._factSub=p.fsub||null;
+      gxTab=p.gtab||'facturas'; window._rsSub=p.rsub||null; rsTab=p.rtab||'redactor';
+    }
+  }
   $('teacher').innerHTML=saShell('<div class="loader"><span class="spin"></span></div>');
   // Comprobar contratos vencidos (revoca automáticamente y avisa una sola vez).
   if(!window._contratosChequeados){
@@ -2760,10 +2782,10 @@ const RS_REDES=[
 let rsPosts=[], rsTab='redactor', rsEdit=null;
 function rsRed(){ return RS_REDES.find(x=>x.id===window._rsSub)||null; }
 function rsSub(v){
-  window._rsSub=v; rsTab='redactor'; rsEdit=null; rsPosts=[];
+  window._rsSub=v; rsTab='redactor'; rsEdit=null; rsPosts=[]; guardarPanel();
   if(v) rsCargar(); else rsRender();
 }
-function rsSetTab(t){ rsTab=t; rsEdit=null; rsPinta(); }
+function rsSetTab(t){ rsTab=t; rsEdit=null; guardarPanel(); rsPinta(); }
 async function rsCargar(){
   const r=rsRed(); if(!r){ rsRender(); return; }
   $('teacher').innerHTML=saShell('<div class="loader"><span class="spin"></span></div>');
@@ -2800,10 +2822,12 @@ function rsContar(){
 }
 /* --- Nivel 1: generador de borradores (prompt listo para pegar en Claude) --- */
 const RS_CONTEXTO=`Aptuvia (aptuvia.es) es una plataforma web de exámenes para academias que imparten Certificados de Profesionalidad del SEPE en España.
+- Lema: "Las cosas claras y las notas más".
 - Cliente que paga: la academia / centro de formación. Usuarios: profesores y alumnos.
 - Qué hace: bancos de preguntas por certificado y unidad formativa, creación de exámenes (tipo test y de redacción con PDF adjunto), corrección automática, medias por unidad (mejor intento y todos los intentos), exámenes que cuentan para nota final, reapertura de intentos, informes por alumno y por clase, descarga en PDF, gestión de profesores/alumnos y facturación.
 - Módulo aparte "Aula Abierta": formación libre, fuera del marco SEPE.
-- La lleva una sola persona: Bernardo Medina Oranto, profesor y desarrollador, desde Sevilla. Producto propio, código registrado en propiedad intelectual.
+- La lleva una sola persona: Bernardo Medina Oranto, desarrollador, desde Sevilla. Producto propio, código registrado en propiedad intelectual.
+- IMPORTANTE: Bernardo NO es profesor y no da clase. Conoció el sector como ALUMNO de un certificado de profesionalidad, y desde ahí construyó la plataforma.
 - Estado real: producto nuevo, en uso con grupos reales, TODAVÍA SIN CARTERA DE CLIENTES DE PAGO.`;
 const RS_FORMATO={
   linkedin:'Post de LinkedIn de 1.000-1.600 caracteres. Primera línea = gancho que se lea solo (sin "En este post voy a..."). Párrafos de 1-2 frases separados por línea en blanco. Nada de listas con viñetas de más de 5 puntos. Cierra con una pregunta o una invitación suave, nunca con venta agresiva. Máximo 3 hashtags al final.',
@@ -2825,7 +2849,7 @@ const RS_TEMAS={
     'Qué mide de verdad un test de 25 preguntas (y qué no)',
     'Evaluación continua vs examen final en formación para el empleo',
     'Digitalizar una academia sin cambiar de LMS ni migrar nada',
-    'Por qué construí Aptuvia: de corregir a mano a montar la plataforma',
+    'Por qué construí Aptuvia: lo que vi desde el pupitre de un certificado',
     'Aula Abierta: formación libre fuera del marco del SEPE',
     'Cuántas horas se van en tareas administrativas en una academia pequeña',
     'Exámenes de redacción con material adjunto: mapas, textos y planos',
@@ -2836,7 +2860,7 @@ const RS_TEMAS={
     'Convertir las notas por unidad en decisiones docentes',
     'Preparar al alumno para el examen oficial sin "enseñarle el test"',
     'Registrar el código en propiedad intelectual: por qué lo hice y cómo fue',
-    'Construir un SaaS siendo profesor y no empresa de software',
+    'Construir un SaaS sin ser una empresa de software',
     'Por qué una academia no necesita una plataforma gigante para evaluar bien'
   ],
   instagram:[
@@ -2932,6 +2956,8 @@ Máximo ${r.max} caracteres.
 
 REGLAS
 - Escribe en español de España, en primera persona del singular (lo escribe Bernardo, no una empresa).
+- NUNCA mientas ni exageres. El lema de Aptuvia es "las cosas claras y las notas más": aplícalo también a lo que escribes.
+- Bernardo NO es profesor: no digas ni insinúes que da clase, que corrige exámenes ni que tiene grupos. Conoce el problema como ALUMNO de un certificado de profesionalidad. Si el tema pide experiencia docente, escríbelo desde la mirada del alumno o desde lo que ha observado, nunca fingiendo ser profesor.
 - No inventes datos, cifras, clientes, testimonios ni casos de éxito: Aptuvia todavía no tiene clientes de pago.
 - Nada de lenguaje de marketing hueco ("solución integral", "revolucionar", "sinergia", "disruptivo").
 - Cero promesas que el producto no cumpla. Si no estás seguro de una función, no la menciones.
@@ -3094,12 +3120,12 @@ async function rsMetrica(id,campo,valor){
 }
 function rsRender(){
   const sub=window._rsSub||null;
-  if(sub){ rsPinta(); return; }
+  if(sub){ rsCargar(); return; }
   let h=`<h2 style="font-size:1.05rem;font-weight:800;color:var(--navy);margin:4px 2px 4px">Redes sociales</h2>
     <p style="font-size:.78rem;color:var(--ink-soft);margin:0 2px 14px">Todo lo de captación, desde aquí. Sin salir de Aptuvia.</p>`;
   h+=`<div class="sa-cards-grid">`;
   RS_REDES.forEach(r=>{
-    h+=`<button class="fact-menu" onclick="rsSub('${r.id}')"><b>${r.emoji} ${escHtml(r.nombre)}</b><span>${escHtml(r.desc)}</span></button>`;
+    h+=`<button class="fact-menu" onclick="rsSub('${r.id}')" style="background:#eef8fe;border-color:var(--honey)"><b>${r.emoji} ${escHtml(r.nombre)}</b><span>${escHtml(r.desc)}</span></button>`;
   });
   h+=`</div>`;
   $('teacher').innerHTML=saShell(h);
@@ -3206,7 +3232,7 @@ function gxPintar(){
   gxWire();
 }
 function gxToggleMes(mk){ window._gxMesAbierto=window._gxMesAbierto||{__init:true}; window._gxMesAbierto[mk]=!window._gxMesAbierto[mk]; gxPintar(); }
-function gxSetTab(t){ gxTab=t; gxEdit=null; gxProvEdit=null; gxRecEdit=null; gxPintar(); }
+function gxSetTab(t){ gxTab=t; gxEdit=null; gxProvEdit=null; gxRecEdit=null; guardarPanel(); gxPintar(); }
 function gxProvNombre(id){ const p=gxProvs.find(x=>String(x.id)===String(id)); return p?p.nombre:'—'; }
 function gxEur(n){ return (Number(n)||0).toFixed(2)+' €'; }
 
@@ -3787,7 +3813,7 @@ function saToggleMes(mk){
   window._factMesAbierto[mk] = !window._factMesAbierto[mk];
   saPintarFacturasEmitidas();
 }
-function saFactSub(v){ window._factSub=v; saRenderFacturacionLista(); }
+function saFactSub(v){ window._factSub=v; guardarPanel(); saRenderFacturacionLista(); }
 
 async function saCargarClientesAA(){
   let profs=[];
