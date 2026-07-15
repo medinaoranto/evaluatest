@@ -8,10 +8,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Poppins:ital,wght@0,500;0,700;1,700&display=swap');
 
 :root{
-  --honey:#E67E0E; --honey-2:#F7A823; --honey-deep:#B45905; --honey-tint:#fff4e2;
+  --honey:#E67E0E; --honey-2:#F7A823; --honey-deep:#B45905; --honey-tint:#fdf6e3;
   --navy:#2e3163; --navy-2:#3c4080; --navy-tint:#e9eaf6;
   --ink:#241a10; --ink-soft:#6b5a48;
-  --cream:#faf8f0; --panel:#ffffff; --line:#ece2d2;
+  --cream:#f9f8ef; --panel:#ffffff; --line:#e8e4d2;
   --ok:#15803d; --ok-bg:#e7f6ec; --no:#c0392b; --no-bg:#fdeceb;
   --r:14px; --font:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
 }
@@ -930,7 +930,8 @@ select option{color:var(--navy);padding:8px;}
 @media(min-width:860px){
   .wrap{padding:28px 32px;}
   /* El panel de admin/profesor usa TODO el ancho disponible (no columna estrecha) */
-  body.teacherview .wrap{max-width:none;}
+  body.teacherview .wrap{max-width:none!important;width:100%;}
+  body.teacherview #teacher{max-width:none;width:100%;}
   .sa-cards-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start;}
   .sa-cards-grid > *{margin-bottom:0 !important;}
 }
@@ -2727,12 +2728,12 @@ function saRenderFacturacionLista(){
   // Menú principal de Facturación: 3 accesos.
   const sub=window._factSub||null;
   if(!sub){
-    let h=`<h2 style="font-size:1.05rem;font-weight:800;color:var(--navy);margin:4px 2px 14px">💶 Facturación</h2>`;
+    let h=`<h2 style="font-size:1.05rem;font-weight:800;color:var(--navy);margin:4px 2px 14px">Facturación</h2>`;
     h+=`<div class="sa-cards-grid">`;
-    h+=`<button class="fact-menu" onclick="saFactSub('emitidas')">📊 <b>Facturas emitidas</b><span>Ver, filtrar y sumar todas las facturas</span></button>`;
-    h+=`<button class="fact-menu" onclick="saFactSub('gastos')">🧾 <b>Gastos y balance</b><span>Facturas de proveedores, gastos previstos y evolución del negocio</span></button>`;
-    h+=`<button class="fact-menu" onclick="saFactSub('academias')">🏫 <b>Academias</b><span>Facturar a las academias de Aptuvia</span></button>`;
-    h+=`<button class="fact-menu" onclick="saFactSub('aa')">🎨 <b>Aula Abierta</b><span>Facturar a los clientes de Aula Abierta</span></button>`;
+    h+=`<button class="fact-menu" onclick="saFactSub('emitidas')"><b>Facturas emitidas</b><span>Ver, filtrar y sumar todas las facturas</span></button>`;
+    h+=`<button class="fact-menu" onclick="saFactSub('gastos')"><b>Gastos y balance</b><span>Facturas de proveedores, gastos previstos y evolución del negocio</span></button>`;
+    h+=`<button class="fact-menu" onclick="saFactSub('academias')"><b>Academias</b><span>Facturar a las academias de Aptuvia</span></button>`;
+    h+=`<button class="fact-menu" onclick="saFactSub('aa')"><b>Aula Abierta</b><span>Facturar a los clientes de Aula Abierta</span></button>`;
     h+=`</div>`;
     $('teacher').innerHTML=saShell(h);
     return;
@@ -2789,7 +2790,7 @@ async function gxRender(){
 
 function gxPintar(){
   let h=`<button class="backbtn" onclick="saSetMain('fact')" style="margin-bottom:10px">← Facturación</button>
-    <h2 style="font-size:1.05rem;font-weight:800;color:var(--navy);margin:2px 2px 12px">🧾 Gastos y balance</h2>`;
+    <h2 style="font-size:1.05rem;font-weight:800;color:var(--navy);margin:2px 2px 12px">Gastos y balance</h2>`;
   h+=`<div class="t-toggle" style="margin-bottom:14px">
     ${[['facturas','Facturas'],['prev','Previstos'],['provs','Proveedores'],['balance','Balance']]
       .map(([k,l])=>`<button class="${gxTab===k?'on':''}" onclick="gxSetTab('${k}')">${l}</button>`).join('')}
@@ -2802,6 +2803,7 @@ function gxPintar(){
   $('teacher').innerHTML=saShell(h);
   gxWire();
 }
+function gxToggleMes(mk){ window._gxMesAbierto=window._gxMesAbierto||{__init:true}; window._gxMesAbierto[mk]=!window._gxMesAbierto[mk]; gxPintar(); }
 function gxSetTab(t){ gxTab=t; gxEdit=null; gxProvEdit=null; gxRecEdit=null; gxPintar(); }
 function gxProvNombre(id){ const p=gxProvs.find(x=>String(x.id)===String(id)); return p?p.nombre:'—'; }
 function gxEur(n){ return (Number(n)||0).toFixed(2)+' €'; }
@@ -2875,29 +2877,45 @@ function gxTabFacturas(){
   </div>`;
   h+=`<button onclick="gxCSV()" style="width:100%;margin-bottom:12px;background:var(--honey-tint);border:1.5px solid var(--honey);color:var(--navy);font-weight:700;border-radius:12px;padding:11px;cursor:pointer;font-family:inherit;font-size:.88rem">↓ CSV (Excel)</button>`;
   if(!list.length) return h+`<p class="sa-empty">No hay gastos con este filtro.</p>`;
-  h+=`<div class="gx-tabla-wrap"><table class="gx-tabla">
-    <thead><tr><th>Fecha</th><th>Proveedor</th><th>Nº factura</th><th>Concepto</th><th>Categoría</th><th style="text-align:right">Base</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th><th></th></tr></thead><tbody>`;
-  list.forEach(g=>{
-    h+=`<tr>
-      <td>${escHtml(g.fecha||'')}</td>
-      <td>${escHtml(gxProvNombre(g.proveedor_id))}</td>
-      <td>${escHtml(g.numero||'—')}</td>
-      <td>${escHtml(g.concepto||'')}</td>
-      <td><span class="gx-cat">${escHtml(g.categoria||'Otros')}</span>${g.deducible===false?' <span class="gx-nod" title="IVA no deducible">no ded.</span>':''}</td>
-      <td style="text-align:right;white-space:nowrap">${g.base!=null?gxEur(g.base):'—'}</td>
-      <td style="text-align:right;white-space:nowrap;color:${g.deducible===false?'var(--ink-soft)':'#15803d'}">${g.iva!=null?gxEur(g.iva):'—'}</td>
-      <td style="text-align:right;font-weight:700;white-space:nowrap">${gxEur(g.importe)}</td>
-      <td style="white-space:nowrap;text-align:right">
-        <button class="gx-mini ${g.pagada?'ok':''}" onclick="gxTogglePagada('${g.id}',${g.pagada?'false':'true'})">${g.pagada?'✅':'○'}</button>
-        ${g.pdf_url?`<button class="gx-mini" onclick="gxVerPDF('${escAttr(g.pdf_url)}')">📄</button>`:''}
-        <button class="gx-mini" onclick="gxEditar('${g.id}')">✏️</button>
-        <button class="gx-mini del" onclick="gxBorrar('${g.id}')">🗑</button>
-      </td></tr>`;
+  // Agrupado por meses, plegable
+  window._gxMesAbierto = window._gxMesAbierto || {};
+  const gmes={};
+  list.forEach(g=>{ const mk=(g.fecha||'').slice(0,7)||'sin-fecha'; (gmes[mk]=gmes[mk]||[]).push(g); });
+  const mks=Object.keys(gmes).sort().reverse();
+  if(window._gxMesAbierto.__init!==true){ window._gxMesAbierto={__init:true}; if(mks[0]) window._gxMesAbierto[mks[0]]=true; }
+  mks.forEach(mk=>{
+    const arr=gmes[mk];
+    const tM=arr.reduce((t,g)=>t+Number(g.importe||0),0);
+    const ab=window._gxMesAbierto[mk]===true;
+    h+=`<button onclick="gxToggleMes('${mk}')" style="width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;margin:14px 0 6px;background:none;border:none;border-bottom:1px solid var(--line);padding:0 2px 6px;cursor:pointer;font-family:inherit">
+      <span style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:.7rem;color:var(--ink-soft);transform:rotate(${ab?'90':'0'}deg);display:inline-block">▶</span>
+        <span style="font-size:.82rem;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-soft)">${mk==='sin-fecha'?'Sin fecha':mesNombre(mk)}</span>
+        <span style="font-size:.7rem;color:var(--ink-soft)">(${arr.length})</span>
+      </span>
+      <b style="font-size:.85rem;color:var(--navy)">${gxEur(tM)}</b></button>`;
+    if(!ab) return;
+    h+=`<div class="gx-tabla-wrap" style="margin-bottom:6px"><table class="gx-tabla">
+      <thead><tr><th>Fecha</th><th>Proveedor</th><th>Nº factura</th><th>Concepto</th><th>Categoría</th><th style="text-align:right">Base</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th><th></th></tr></thead><tbody>`;
+    arr.forEach(g=>{
+      h+=`<tr>
+        <td>${escHtml(g.fecha||'')}</td>
+        <td>${escHtml(gxProvNombre(g.proveedor_id))}</td>
+        <td>${escHtml(g.numero||'—')}</td>
+        <td>${escHtml(g.concepto||'')}</td>
+        <td><span class="gx-cat">${escHtml(g.categoria||'Otros')}</span>${g.deducible===false?' <span class="gx-nod">no ded.</span>':''}</td>
+        <td style="text-align:right;white-space:nowrap">${g.base!=null?gxEur(g.base):'—'}</td>
+        <td style="text-align:right;white-space:nowrap;color:${g.deducible===false?'var(--ink-soft)':'#15803d'}">${g.iva!=null?gxEur(g.iva):'—'}</td>
+        <td style="text-align:right;font-weight:700;white-space:nowrap">${gxEur(g.importe)}</td>
+        <td style="white-space:nowrap;text-align:right">
+          <button class="gx-mini ${g.pagada?'ok':''}" onclick="gxTogglePagada('${g.id}',${g.pagada?'false':'true'})">${g.pagada?'✅':'○'}</button>
+          ${g.pdf_url?`<button class="gx-mini" onclick="gxVerPDF('${escAttr(g.pdf_url)}')">📄</button>`:''}
+          <button class="gx-mini" onclick="gxEditar('${g.id}')">✏️</button>
+          <button class="gx-mini del" onclick="gxBorrar('${g.id}')">🗑</button>
+        </td></tr>`;
+    });
+    h+=`</tbody></table></div>`;
   });
-  h+=`</tbody><tfoot><tr><td colspan="5" style="text-align:right;font-weight:800">TOTAL</td>
-    <td style="text-align:right;font-weight:800">${gxEur(totBase)}</td>
-    <td style="text-align:right;font-weight:800;color:#15803d">${gxEur(totIvaDed)}</td>
-    <td style="text-align:right;font-weight:800;color:var(--navy)">${gxEur(total)}</td><td></td></tr></tfoot></table></div>`;
   return h;
 }
 
@@ -3070,8 +3088,8 @@ async function gxGuardar(){
     const f=$('gf-pdf'); const file=f&&f.files&&f.files[0];
     if(file){
       const path=`gastos/${Date.now()}_${file.name.replace(/[^\w.\-]/g,'_')}`;
-      const up=await fetch(`${SUPA}/storage/v1/object/facturas-gastos/${path}`,{
-        method:'POST', headers:{apikey:ANON, Authorization:'Bearer '+token, 'Content-Type':'application/pdf'}, body:file});
+      const up=await fetch(`${SUPABASE_URL}/storage/v1/object/facturas-gastos/${path}`,{
+        method:'POST', headers:{apikey:SUPABASE_KEY, Authorization:'Bearer '+token, 'Content-Type':'application/pdf'}, body:file});
       if(!up.ok) throw new Error('No se pudo subir el PDF ('+up.status+'). ¿Creaste el bucket facturas-gastos?');
       body.pdf_url=path;
     }
@@ -3094,11 +3112,11 @@ async function gxBorrar(id){
 }
 async function gxVerPDF(path){
   try{
-    const r=await fetch(`${SUPA}/storage/v1/object/sign/facturas-gastos/${path}`,{
-      method:'POST', headers:{apikey:ANON, Authorization:'Bearer '+token, 'Content-Type':'application/json'},
+    const r=await fetch(`${SUPABASE_URL}/storage/v1/object/sign/facturas-gastos/${path}`,{
+      method:'POST', headers:{apikey:SUPABASE_KEY, Authorization:'Bearer '+token, 'Content-Type':'application/json'},
       body:JSON.stringify({expiresIn:3600})});
     const d=await r.json();
-    if(d&&d.signedURL) window.open(`${SUPA}/storage/v1${d.signedURL}`,'_blank');
+    if(d&&d.signedURL) window.open(`${SUPABASE_URL}/storage/v1${d.signedURL}`,'_blank');
     else throw new Error('sin URL');
   }catch(e){ appAlert('No se pudo abrir el PDF.'); }
 }
