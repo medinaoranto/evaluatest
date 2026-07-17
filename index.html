@@ -1028,7 +1028,7 @@ select option{color:var(--navy);padding:8px;}
     </div>
     <input type="hidden" id="portal-select" value="">
     <button class="btn btn-primary btn-portal" id="portal-btn" onclick="portalEntrar()">Acceder</button>
-    <button class="btn btn-ghost btn-portal" id="portal-demo" onclick="demoPortal()" style="margin-top:10px">🧪 Ver demo sin registrarse</button>
+    <button class="btn btn-ghost btn-portal" id="portal-demo" onclick="demoPortal()" style="margin-top:10px">Ver demo sin registrarse</button>
     <p class="portal-msg" id="portal-msg"></p>
   </div>
   <div class="foot-legal">
@@ -1719,7 +1719,7 @@ function mostrarAvisoDemoAula(){
   const host = isStaff() ? $('teacher') : $('home');
   if(!host) return;
   host.insertAdjacentHTML('afterbegin', `<div class="t-note" style="background:#eaf9fc;border:1.5px solid #90E0EF;color:#0077B6;margin-bottom:14px">
-    🧪 Sesión de demostración de Aula Abierta — la navegación es real, pero nada se guarda todavía.
+    Sesión de demostración de Aula Abierta — la navegación es real, pero nada se guarda todavía.
     Crea estas dos cuentas en Supabase (o regístrate desde el login) para que pase a guardar datos reales.
   </div>`);
 }
@@ -2853,7 +2853,7 @@ const RS_CONTEXTO=`Aptuvia (aptuvia.es) es una plataforma web de exámenes para 
 - Módulo aparte "Aula Abierta": formación libre, fuera del marco SEPE.
 - La lleva una sola persona: Bernardo Medina Oranto, desarrollador, desde Sevilla. Producto propio, código registrado en propiedad intelectual.
 - IMPORTANTE: Bernardo NO es profesor y no da clase. Conoció el sector como ALUMNO de un certificado de profesionalidad, y desde ahí construyó la plataforma.
-- Estado real: producto nuevo, en uso con grupos reales, TODAVÍA SIN CARTERA DE CLIENTES DE PAGO.`;
+- Estado real: producto nuevo y terminado, SIN ALUMNOS ACTIVOS ahora mismo (el curso en el que se probó ya acabó) y TODAVÍA SIN CARTERA DE CLIENTES DE PAGO. No digas que hay grupos usándolo.`;
 const RS_FORMATO={
   linkedin:'Post de LinkedIn de 1.000-1.600 caracteres. Primera línea = gancho que se lea solo (sin "En este post voy a..."). Párrafos de 1-2 frases separados por línea en blanco. Nada de listas con viñetas de más de 5 puntos. Cierra con una pregunta o una invitación suave, nunca con venta agresiva. Máximo 3 hashtags al final.',
   instagram:'Caption de Instagram de 600-1.200 caracteres. Primera línea = gancho corto. Emojis con moderación (3-6 en total). Si el tema pide vídeo, incluye antes un guion de reel de 30 segundos con los cortes marcados. Termina con 8-10 hashtags en un bloque aparte.',
@@ -3003,7 +3003,7 @@ async function rsCompartirPrompt(){
 function rsTabRedactor(r){
   const p=rsEdit||{};
   const tema=rsTemas(r)[rsTemaIdx(r)]||'—';
-  let h=`<div style="border:1.5px solid var(--honey);background:var(--honey-tint);border-radius:12px;padding:12px;margin-bottom:14px">
+  let h=`<div style="border:1.5px solid var(--honey);background:#f2faf2;border-radius:12px;padding:12px;margin-bottom:14px">
     <div style="font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft);margin-bottom:4px">Tema sugerido (${rsTemaIdx(r)+1} de ${rsTemas(r).length})</div>
     <div style="font-size:.88rem;font-weight:700;color:var(--navy);line-height:1.35;margin-bottom:10px">${escHtml(tema)}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -7506,7 +7506,7 @@ const DEMO_UNIDADES = [
   {id:'demo-u2', codigo:'MF0974_1', titulo:'Tratamiento de datos, textos y documentación', modulo:'MF0974_1 · Tratamiento de datos', orden:2, estado:'activo', ver_megatest:false, ver_falladas:true, certificado_id:DEMO_CERT_ID, academia_id:DEMO_ACADEMIA, profesor_id:'demo-prof'},
   // Aula Abierta · Marta Ruiz (Historia) y Javier Soto (Biología)
   {id:'aula-demo-hist', codigo:'HIST-XX', titulo:'BACHILLERATO|Historia de España · siglo XX', modulo:'Aula Abierta', orden:1, estado:'activo', ver_megatest:true, ver_falladas:true, certificado_id:null, academia_id:DEMO_ACADEMIA, profesor_id:'demo-prof-aa1'},
-  {id:'aula-demo-bio',  codigo:'BIO-CEL', titulo:'ESO|Biología · la célula',                  modulo:'Aula Abierta', orden:2, estado:'activo', ver_megatest:false, ver_falladas:false, certificado_id:null, academia_id:DEMO_ACADEMIA, profesor_id:'demo-prof-aa2'}
+  {id:'aula-demo-bio',  codigo:'BIO-CEL', titulo:'ESO|Biología · la célula',                  modulo:'Aula Abierta', orden:2, estado:'activo', ver_megatest:false, ver_falladas:false, certificado_id:null, academia_id:DEMO_ACADEMIA, profesor_id:'demo-prof-aa1'}
 ];
 
 const DEMO_EXAMENES = [
@@ -7516,7 +7516,7 @@ const DEMO_EXAMENES = [
   {id:'demo-red', unidad:'demo-u2', numero:'2', titulo:'Informe escrito (redacción)',       tema:'Tema 2', nivel:'medio', orden:2, cuenta_final:false, tipo:'redaccion', academia_id:DEMO_ACADEMIA, profesor_id:'demo-prof', material_url:null, material_modo:null},
   {id:'demo-h1',  unidad:'aula-demo-hist', numero:'1', titulo:'De la República a la Guerra Civil', tema:'Tema 1', nivel:'medio', orden:1, cuenta_final:false, tipo:'test', academia_id:DEMO_ACADEMIA, profesor_id:'demo-prof-aa1', material_url:null, material_modo:null},
   {id:'demo-h2',  unidad:'aula-demo-hist', numero:'2', titulo:'La Transición',                     tema:'Tema 2', nivel:'medio', orden:2, cuenta_final:true,  tipo:'test', academia_id:DEMO_ACADEMIA, profesor_id:'demo-prof-aa1', material_url:null, material_modo:null},
-  {id:'demo-b1',  unidad:'aula-demo-bio',  numero:'1', titulo:'La célula · trabajo escrito',       tema:'Tema 1', nivel:'medio', orden:1, cuenta_final:false, tipo:'redaccion', academia_id:DEMO_ACADEMIA, profesor_id:'demo-prof-aa2', material_url:null, material_modo:null}
+  {id:'demo-b1',  unidad:'aula-demo-bio',  numero:'1', titulo:'La célula · trabajo escrito',       tema:'Tema 1', nivel:'medio', orden:1, cuenta_final:false, tipo:'redaccion', academia_id:DEMO_ACADEMIA, profesor_id:'demo-prof-aa1', material_url:null, material_modo:null}
 ];
 
 function _dFecha(d){ const x=new Date(); x.setDate(x.getDate()-d); return x.toISOString(); }
@@ -7554,7 +7554,7 @@ function demoResponder(path, opts){
   if(p.indexOf('/rest/v1/unidades')===0) return DEMO_UNIDADES.map(u=>({...u}));
   if(p.indexOf('/rest/v1/examenes?select=id,tipo')===0) return DEMO_EXAMENES.map(e=>({id:e.id,tipo:e.tipo}));
   if(p.indexOf('/rest/v1/examenes')===0) return DEMO_EXAMENES.map(e=>({...e}));
-  if(p.indexOf('/rest/v1/perfiles')===0) return DEMO_PERFILES.map(x=>({...x}));
+  if(p.indexOf('/rest/v1/perfiles')===0) return [ {...(window._demoPerfil||DEMO_PERFILES[0])} ];
   if(p.indexOf('/rest/v1/intentos')===0) return DEMO_INTENTOS.map(x=>({...x}));
   if(p.indexOf('/rest/v1/entregas')===0) return DEMO_ENTREGAS.map(x=>({...x}));
   if(p.indexOf('/rest/v1/temario')===0) return [];
@@ -7620,7 +7620,7 @@ function demoBanda(){
     b.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1e2252;color:#fff;'+
       'font-size:.78rem;padding:9px 12px;display:flex;gap:10px;align-items:center;justify-content:center;'+
       'box-shadow:0 -3px 14px rgba(0,0,0,.25);flex-wrap:wrap';
-    b.innerHTML='<span>🧪 <b>DEMO</b> — todos los datos son inventados. Nada se guarda.</span>'+
+    b.innerHTML='<span><b>DEMO</b> — todos los datos son inventados. Nada se guarda.</span>'+
       '<button onclick="demoSalir()" style="background:var(--honey);color:#fff;border:0;border-radius:8px;padding:6px 12px;font-weight:800;font-size:.75rem;cursor:pointer">Salir de la demo</button>';
     document.body.appendChild(b);
     document.body.style.paddingBottom='52px';
@@ -7641,9 +7641,10 @@ function demoPortal(){
       <p style="margin:0;font-size:.85rem">La <b>estructura</b> sí es real: módulos y unidades formativas tal y como los verías el primer día.</p>
     </div>
     <p style="font-size:.85rem;margin-bottom:14px">Es un recorrido de <b>solo lectura</b>: puedes moverte por todas las pantallas, pero nada se guarda.</p>
-    <button class="btn btn-primary btn-portal" onclick="demoEntrar('alumno')" style="margin-bottom:8px">Entrar como alumno</button>
-    <button class="btn btn-primary btn-portal" onclick="demoEntrar('profesor')" style="margin-bottom:8px">Entrar como profesor</button>
-    <button class="btn btn-ghost btn-portal" onclick="demoEntrar('aa')" style="margin-bottom:8px">Entrar en Aula Abierta</button>
+    <button class="btn btn-portal" onclick="demoEntrar('prof')"      style="background:linear-gradient(to right,#fdf1dd,#f3cf8e);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Profesor · Aptuvia</button>
+    <button class="btn btn-portal" onclick="demoEntrar('alumno')"    style="background:linear-gradient(to right,#fdf1dd,#f3cf8e);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Alumno · Aptuvia</button>
+    <button class="btn btn-portal" onclick="demoEntrar('aa-prof')"   style="background:linear-gradient(to right,#eaf6fd,#7fc3e8);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Profesor · Aula Abierta</button>
+    <button class="btn btn-portal" onclick="demoEntrar('aa-alumno')" style="background:linear-gradient(to right,#eaf6fd,#7fc3e8);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Alumno · Aula Abierta</button>
     <button class="btn btn-ghost btn-portal" onclick="location.reload()">← Volver</button>
     <p style="font-size:.75rem;color:var(--ink-soft);margin-top:12px">¿Prefieres verlo con tu certificado y tus contenidos? Escríbenos a contacto@aptuvia.es</p>
   </div>`;
@@ -7655,21 +7656,34 @@ async function demoEntrar(perfil){
   window._saImpersona=false; window._saImpersonaProf=null; window._saImpersonaAA=false;
   token='demo'; refreshToken=null;
   userAcademia=DEMO_ACADEMIA;
-  if(perfil==='profesor'){
-    userRol='profesor'; userId='demo-prof'; userName='Elena Ortiz (demo)'; userEmail='profesor@demo.local'; userProfesorId=null;
+  // OJO: loadData() machaca userRol/userId/userProfesorId con perfil[0]. Por eso la
+  // demo fija aquí window._demoPerfil y /rest/v1/perfiles devuelve SOLO esa fila.
+  if(perfil==='prof'){                 // Profesor · Aptuvia (EV)
+    window._demoPerfil={id:'demo-prof', nombre:'Elena Ortiz (demo)', rol:'profesor', academia_id:DEMO_ACADEMIA, profesor_id:null};
     window._activeCertId=DEMO_PORTAL_ID;
-  }else if(perfil==='aa'){
-    userRol='alumno'; userId='demo-alumno'; userName='Lucía Fernández (demo)'; userEmail='alumno@demo.local'; userProfesorId='demo-prof-aa1';
+  }else if(perfil==='aa-prof'){        // Profesor · Aula Abierta
+    window._demoPerfil={id:'demo-prof-aa1', nombre:'Marta Ruiz (demo)', rol:'profesor', academia_id:DEMO_ACADEMIA, profesor_id:null};
     window._activeCertId='__aula_abierta';
-  }else{
-    userRol='alumno'; userId='demo-alumno'; userName='Lucía Fernández (demo)'; userEmail='alumno@demo.local'; userProfesorId='demo-prof';
+  }else if(perfil==='aa-alumno'){      // Alumno · Aula Abierta
+    window._demoPerfil={id:'demo-alumno', nombre:'Lucía Fernández (demo)', rol:'alumno', academia_id:DEMO_ACADEMIA, profesor_id:'demo-prof-aa1'};
+    window._activeCertId='__aula_abierta';
+  }else{                               // Alumno · Aptuvia (EV)
+    window._demoPerfil={id:'demo-alumno', nombre:'Lucía Fernández (demo)', rol:'alumno', academia_id:DEMO_ACADEMIA, profesor_id:'demo-prof'};
     window._activeCertId=DEMO_PORTAL_ID;
   }
-  window._certCodigo = (perfil==='aa') ? 'AULA ABIERTA' : 'DEMO0508';
-  window._certNombre = (perfil==='aa') ? 'Formación libre (demostración)'
-                                       : 'Operaciones de grabación y tratamiento de datos y documentos (demostración)';
+  userRol=window._demoPerfil.rol; userId=window._demoPerfil.id; userName=window._demoPerfil.nombre;
+  userProfesorId=window._demoPerfil.profesor_id;
+  userEmail=(userRol==='profesor')?'profesor@demo.local':'alumno@demo.local';
+  const esAA = (window._activeCertId==='__aula_abierta');
+  window._certCodigo = esAA ? 'AULA ABIERTA' : 'DEMO0508';
+  window._certNombre = esAA ? 'Formación libre (demostración)'
+                            : 'Operaciones de grabación y tratamiento de datos y documentos (demostración)';
   applyTema(window._activeCertId);
-  $('portal').classList.add('hidden'); $('login').classList.add('hidden');
+  // Mismo destape de vistas que hace doLogin(): sin esto la app queda en blanco.
+  $('portal').classList.add('hidden');
+  $('login').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  sbRender();
   demoBanda();
   try{ await loadData(); }
   catch(e){ appAlert('No se pudo abrir la demo: '+(e.message||'')); }
