@@ -2492,6 +2492,100 @@ async function openSuperadmin(okMsg,errMsg){
   }
   saRenderLista(okMsg,errMsg);
 }
+function avAreaActual(){
+  if(saMainTab==='fact') return 'admin';
+  if(saMainTab==='rs')   return 'comercial';
+  return 'soporte';
+}
+// Módulo de avisos: campana por departamento. Admin ve TODO en lectura.
+let avLista=null, avArch=[], avCargando=false;
+async function avCargar(force){
+  if(avLista && !force) return;
+  if(avCargando) return;
+  avCargando=true;
+  try{
+    const [av,ar]=await Promise.all([
+      call('/rest/v1/rpc/sa_avisos',{method:'POST',body:{}}),
+      call('/rest/v1/avisos_archivados?select=*&order=archivado_en.desc')
+    ]);
+    avLista=av||[]; avArch=ar||[];
+  }catch(e){ avLista=[]; avArch=[]; }
+  avCargando=false;
+  avPintarBarra();
+}
+function avVisibles(area){
+  const arch=new Set(avArch.map(a=>a.clave));
+  return (avLista||[]).filter(a=>{
+    if(arch.has(a.clave)) return false;
+    if(area==='admin') return true;          // admin ve todo
+    return a.area===area;
+  });
+}
+function avPintarBarra(){
+  const bar=$('av-bar'); if(!bar) return;
+  const area=avAreaActual();
+  const vis=avVisibles(area);
+  const urgentes=vis.some(a=>a.urgente===true);
+  const abierta=window._avAbierta;
+  bar.innerHTML=`<button onclick="avToggle()" style="width:100%;display:flex;align-items:center;gap:8px;background:${vis.length?'var(--honey-tint)':'#f4f4f6'};border:1.5px solid ${vis.length?'var(--honey)':'var(--line)'};border-radius:11px;padding:9px 12px;cursor:pointer;font-family:inherit;color:var(--navy);font-weight:700;font-size:.82rem">
+      <span style="position:relative">🔔${urgentes?'<span style="position:absolute;top:-3px;right:-5px;width:9px;height:9px;background:#e11d1d;border-radius:50%;border:1.5px solid #fff"></span>':''}</span>
+      <span>Avisos</span>
+      ${vis.length?`<span style="background:var(--honey);color:#fff;border-radius:9px;padding:0 7px;font-size:.72rem">${vis.length}</span>`:'<span style="color:var(--ink-soft);font-weight:600">al día</span>'}
+      <span style="margin-left:auto;color:var(--ink-soft);font-size:.72rem">${abierta?'▲':'▼'}</span>
+    </button>`;
+  if(abierta) bar.innerHTML+=avPanel(area,vis);
+}
+function avPanel(area,vis){
+  let h=`<div style="border:1.5px solid var(--line);border-top:0;border-radius:0 0 11px 11px;background:#fff;padding:10px 12px;margin-top:-3px">`;
+  if(area==='admin') h+=`<p style="font-size:.68rem;color:var(--ink-soft);margin:0 0 8px">Administración ve los avisos de todas las áreas.</p>`;
+  if(!vis.length){
+    h+=`<p style="font-size:.8rem;color:var(--ink-soft);text-align:center;padding:6px 0">Nada pendiente. 👍</p>`;
+  }else{
+    vis.forEach(a=>{
+      const et=area==='admin'?`<span style="font-size:.6rem;font-weight:800;text-transform:uppercase;color:var(--ink-soft);letter-spacing:.5px;margin-right:5px">${a.area}</span>`:'';
+      h+=`<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)">
+        <span style="flex:1;font-size:.78rem;color:${a.urgente?'#b4232a':'var(--ink)'}">${a.urgente?'⚠️ ':(a.icono||'•')+' '}${et}${escHtml(a.texto)}</span>
+        <button onclick="avArchivar('${escAttr(a.clave)}')" title="Cerrar" style="flex:0 0 auto;background:#fff;border:1px solid var(--line);border-radius:6px;width:20px;height:20px;line-height:1;font-size:.72rem;color:var(--ink-soft);cursor:pointer;padding:0">✕</button>
+      </div>`;
+    });
+  }
+  const nArch=avArch.length;
+  h+=`<button onclick="avVerArchivados()" style="width:100%;margin-top:9px;background:none;border:0;color:var(--ink-soft);font-size:.72rem;cursor:pointer;font-family:inherit;text-decoration:underline">Ver archivados${nArch?' ('+nArch+')':''}</button>`;
+  return h+`</div>`;
+}
+function avToggle(){ window._avAbierta=!window._avAbierta; avPintarBarra(); }
+async function avArchivar(clave){
+  const a=(avLista||[]).find(x=>x.clave===clave);
+  try{
+    await call('/rest/v1/avisos_archivados',{method:'POST',body:{clave, texto:a?a.texto:'', tipo:a?a.area:''}});
+    avArch.unshift({clave, texto:a?a.texto:'', tipo:a?a.area:'', archivado_en:new Date().toISOString()});
+    avPintarBarra();
+  }catch(e){ appAlert('No se pudo archivar: '+(e.message||'')); }
+}
+async function avVerArchivados(){
+  let h=`<button class="backbtn" onclick="saSetMain(saMainTab)" style="margin-bottom:10px">← Volver</button>
+    <h2 style="font-size:1.05rem;font-weight:800;color:var(--navy);margin:2px 2px 4px">🔔 Avisos archivados</h2>
+    <p style="font-size:.74rem;color:var(--ink-soft);margin:0 2px 12px">Los avisos cerrados con ✕ se guardan aquí. Mientras estén archivados no reaparecen.</p>`;
+  if(!avArch.length){ h+=`<p class="sa-empty">No hay avisos archivados.</p>`; }
+  else avArch.forEach(a=>{
+    const f=String(a.archivado_en||'').slice(0,10);
+    h+=`<div style="border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:7px;background:#fff;display:flex;align-items:flex-start;gap:8px">
+      <span style="flex:1;font-size:.78rem">${escHtml(a.texto||a.clave)}<br><span style="font-size:.68rem;color:var(--ink-soft)">${a.tipo?a.tipo+' · ':''}archivado el ${escHtml(f)}</span></span>
+      <button onclick="avBorrar('${escAttr(String(a.id||a.clave))}','${escAttr(a.clave)}')" class="gx-mini del" style="flex:0 0 auto">🗑</button>
+    </div>`;
+  });
+  $('teacher').innerHTML=saShell(h);
+}
+async function avBorrar(id,clave){
+  if(!await appConfirm('¿Quitar este aviso archivado? Volverá a aparecer si la condición sigue activa.')) return;
+  if(!await appConfirm('Se borrará PARA SIEMPRE del archivo. ¿Confirmas?')) return;
+  try{
+    if(id && id!==clave) await call('/rest/v1/avisos_archivados?id=eq.'+id,{method:'DELETE'});
+    else await call('/rest/v1/avisos_archivados?clave=eq.'+encodeURIComponent(clave),{method:'DELETE'});
+    avArch=avArch.filter(a=>a.clave!==clave);
+    avVerArchivados();
+  }catch(e){ appAlert('No se pudo borrar: '+(e.message||'')); }
+}
 function saShell(inner){
   const ico=`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg>`;
   const base=`font-size:.66rem;padding:9px 3px;border:1.5px solid var(--honey);background:linear-gradient(to right,#eaf6fd,#7fc3e8);color:var(--navy)`;
@@ -2506,6 +2600,7 @@ function saShell(inner){
       <button style="${st('fact')}" onclick="saSetMain('fact')">Administración</button>
       <button style="${st('rs')}" onclick="saSetMain('rs')">Comercial</button>
     </div>
+    ${window._avRaiz?`<div id="av-bar" style="margin:0 0 ${enSoporte?'8px':'12px'}"></div>`:''}
     ${enSoporte?`<div class="t-toggle" style="margin:0 0 16px;display:flex;gap:5px;flex-wrap:nowrap">
       <button style="${sub('ev')}" onclick="saSetMain('ev')">Aptuvia</button>
       <button style="${sub('aa')}" onclick="saSetMain('aa')">Aula Abierta</button>
@@ -2514,6 +2609,9 @@ function saShell(inner){
 }
 function saRenderLista(okMsg,errMsg){
   saSelAcad=null;
+  window._avAbierta=false;
+  window._avRaiz=true;
+  setTimeout(()=>{ try{ avCargar(true); }catch(e){} },0);
   let h='';
   if(okMsg) h+=`<div class="t-note ok">${escHtml(okMsg)}</div>`;
   if(errMsg) h+=`<div class="t-note err">${escHtml(errMsg)}</div>`;
@@ -3203,9 +3301,9 @@ function saRenderFacturacionLista(){
     h+=`<div class="sa-cards-grid">`;
     h+=`<button class="fact-menu" onclick="saFactSub('academias')"><b>Facturar Aptuvia</b><span>Emitir factura a las academias de la plataforma</span></button>`;
     h+=`<button class="fact-menu" onclick="saFactSub('aa')"><b>Facturar Aula Abierta</b><span>Emitir factura a los clientes de Aula Abierta</span></button>`;
-    h+=`<button class="fact-menu" onclick="saFactSub('conta')"><b>🧾 Contabilidad</b><span>Libros, IVA (303), IRPF (130) y resúmenes anuales (390, 347)</span></button>`;
     h+=`<button class="fact-menu" onclick="saFactSub('emitidas')"><b>Facturas emitidas</b><span>Ver, filtrar y sumar todas las facturas</span></button>`;
     h+=`<button class="fact-menu" onclick="saFactSub('gastos')"><b>Gastos y balance</b><span>Facturas de proveedores, gastos previstos y evolución del negocio</span></button>`;
+    h+=`<button class="fact-menu" onclick="saFactSub('conta')"><b>🧾 Contabilidad</b><span>Libros, IVA (303), IRPF (130) y resúmenes anuales (390, 347)</span></button>`;
     h+=`</div>`;
     $('teacher').innerHTML=saShell(h);
     return;
@@ -3278,6 +3376,7 @@ function pxNuevoNumero(){
 }
 
 async function pxRender(){
+  window._avRaiz=false;
   $('teacher').innerHTML=saShell('<div class="loader"><span class="spin"></span></div>');
   try{ pxLista=await call('/rest/v1/presupuestos?select=*&order=fecha.desc,creado_en.desc')||[]; }
   catch(e){
@@ -3770,6 +3869,7 @@ function ctSet(k,v){
 }
 
 async function ctRender(){
+  window._avRaiz=false;
   $('teacher').innerHTML=saShell('<div class="loader"><span class="spin"></span></div>');
   try{
     const [p,g]=await Promise.all([
@@ -4072,6 +4172,7 @@ function mesNombre(mk){
 }
 
 async function gxRender(){
+  window._avRaiz=false;
   $('teacher').innerHTML=saShell('<div class="loader"><span class="spin"></span></div>');
   try{
     const [p,g,r]=await Promise.all([
