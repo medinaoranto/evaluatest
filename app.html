@@ -998,6 +998,8 @@ select option{color:var(--navy);padding:8px;}
 .gx-form{display:flex;flex-direction:column;gap:4px;}
 .gx-form label{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft);margin-top:8px;}
 .gx-form input,.gx-form select{padding:10px;border:1.5px solid var(--line);border-radius:10px;font-size:.88rem;background:#fff;font-family:inherit;}
+.gx-form label.chk{display:flex;align-items:center;gap:9px;text-transform:none;font-size:.82rem;font-weight:600;letter-spacing:0;color:var(--ink);margin-top:10px;line-height:1.35;cursor:pointer;}
+.gx-form input[type=checkbox]{flex:0 0 auto;width:18px;height:18px;padding:0;margin:0;border-radius:4px;accent-color:var(--honey);}
 @media(min-width:860px){
   .gx-filtros{grid-template-columns:repeat(4,1fr);}
   .gx-form{display:grid;grid-template-columns:auto 1fr;gap:10px 14px;align-items:center;}
@@ -2496,12 +2498,19 @@ function saShell(inner){
   const base=`font-size:.66rem;padding:9px 3px;border:1.5px solid var(--honey);background:linear-gradient(to right,#eaf6fd,#7fc3e8);color:var(--navy)`;
   const on=`font-size:.66rem;padding:9px 3px;border:1.5px solid var(--honey);background:linear-gradient(to right,#5aa9d6,#1d4f78);color:#fff`;
   const st=(t)=>saMainTab===t?on:base;
-  return `<div class="t-toggle" style="margin:8px 0 16px;display:flex;gap:5px;flex-wrap:nowrap">
-      <button style="${st('ev')}" onclick="saSetMain('ev')">Aptuvia</button>
-      <button style="${st('aa')}" onclick="saSetMain('aa')">Aula Abierta</button>
-      <button style="${st('fact')}" onclick="saSetMain('fact')">Gestión</button>
-      <button onclick="saSetMain('rs')" title="Redes sociales" aria-label="Redes sociales" style="${st('rs')};flex:0 0 auto;width:40px;padding:9px 0;display:flex;align-items:center;justify-content:center">${ico}</button>
+  const enSoporte = (saMainTab==='ev' || saMainTab==='aa');
+  const sub=(t)=>saMainTab===t
+    ? 'font-size:.7rem;padding:7px 4px;border:1.5px solid var(--honey);background:linear-gradient(to right,#5aa9d6,#1d4f78);color:#fff'
+    : 'font-size:.7rem;padding:7px 4px;border:1.5px solid var(--honey);background:linear-gradient(to right,#eaf6fd,#7fc3e8);color:var(--navy)';
+  return `<div class="t-toggle" style="margin:8px 0 ${enSoporte?'8px':'16px'};display:flex;gap:5px;flex-wrap:nowrap">
+      <button style="${enSoporte?on:base}" onclick="saSetMain('ev')">Soporte</button>
+      <button style="${st('fact')}" onclick="saSetMain('fact')">Administración</button>
+      <button style="${st('rs')}" onclick="saSetMain('rs')">Comercial</button>
     </div>
+    ${enSoporte?`<div class="t-toggle" style="margin:0 0 16px;display:flex;gap:5px;flex-wrap:nowrap">
+      <button style="${sub('ev')}" onclick="saSetMain('ev')">Aptuvia</button>
+      <button style="${sub('aa')}" onclick="saSetMain('aa')">Aula Abierta</button>
+    </div>`:''}
     ${inner}`;
 }
 function saRenderLista(okMsg,errMsg){
@@ -4091,8 +4100,8 @@ function gxPintar(){
     <h2 style="font-size:1.05rem;font-weight:800;color:var(--navy);margin:2px 2px 12px">Gastos y balance</h2>`;
   h+=`<div class="t-toggle" style="margin-bottom:14px">
     ${[['facturas','Facturas'],['prev','Previstos'],['provs','Proveedores'],['balance','Balance']]
-      .map(([k,l])=>`<button class="${gxTab===k?'on':''}" onclick="gxSetTab('${k}')">${l}</button>`).join('')}
-    <button class="${gxTab==='avisos'?'on':''}" onclick="gxSetTab('avisos')" title="Avisos archivados" style="flex:0 0 auto;padding:8px 10px">🔔${gxArch.length?`<span style="font-size:.62rem;font-weight:800;background:var(--honey);color:#fff;border-radius:8px;padding:0 4px;margin-left:3px">${gxArch.length}</span>`:''}</button>
+      .map(([k,l])=>`<button class="${gxTab===k?'on':''}" onclick="gxSetTab('${k}')" style="font-size:.62rem;padding:8px 2px">${l}</button>`).join('')}
+    <button class="${gxTab==='avisos'?'on':''}" onclick="gxSetTab('avisos')" title="Avisos archivados" style="flex:0 0 auto;padding:8px 8px">🔔${gxArch.length?`<span style="font-size:.62rem;font-weight:800;background:var(--honey);color:#fff;border-radius:8px;padding:0 4px;margin-left:3px">${gxArch.length}</span>`:''}</button>
   </div>`;
   if(gxTab!=='avisos') h+=gxAvisos();
   if(gxTab==='facturas') h+=gxTabFacturas();
@@ -4405,10 +4414,10 @@ function gxForm(){
       ${['Hosting y dominios','Software y suscripciones','Servicios profesionales','Tasas e impuestos','Marketing','Material','Otros']
         .map(c=>`<option value="${escAttr(c)}"${(g.categoria||'Otros')===c?' selected':''}>${escHtml(c)}</option>`).join('')}
     </select>
-    <label style="display:flex;align-items:center;gap:8px;margin-top:4px"><input type="checkbox" id="gf-ded" ${g.deducible===false?'':'checked'}> IVA deducible</label>
-    <label style="display:flex;align-items:center;gap:8px;margin-top:4px"><input type="checkbox" id="gf-inv" ${g.inversion===true?'checked':''}> Bien de inversión (dura +1 año, va al libro de inversión)</label>
+    <label class="chk"><input type="checkbox" id="gf-ded" ${g.deducible===false?'':'checked'}> IVA deducible</label>
+    <label class="chk"><input type="checkbox" id="gf-inv" ${g.inversion===true?'checked':''}> Bien de inversión (dura más de un año)</label>
     <label>Vencimiento (opcional)</label><input type="date" id="gf-venc" value="${g.vencimiento||''}">
-    <label style="display:flex;align-items:center;gap:8px;margin-top:4px"><input type="checkbox" id="gf-pag" ${g.pagada?'checked':''}> Pagada</label>
+    <label class="chk"><input type="checkbox" id="gf-pag" ${g.pagada?'checked':''}> Pagada</label>
     <label>Factura en PDF (opcional)</label><input type="file" id="gf-pdf" accept="application/pdf" onchange="gxAutoPDF(this)">
     <div id="gf-auto" style="font-size:.75rem;margin-top:4px;color:var(--ink-soft)"></div>
     ${g.pdf_url?`<div style="font-size:.75rem;margin-top:4px;display:flex;gap:14px;align-items:center"><a href="#" onclick="gxVerPDF('${escAttr(g.pdf_url)}');return false;">📄 Ver PDF actual</a><a href="#" style="color:#b4232a" onclick="gxBorrarPDF();return false;">🗑 Eliminar PDF</a></div>`:''}
