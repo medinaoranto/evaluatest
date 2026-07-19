@@ -6480,7 +6480,7 @@ async function openRedaccion(examId){
   const all=[].concat(...Object.values(examsByUnit));
   const ex=all.find(e=>e.id===examId)||{};
   redCurrent={examId, unitId:ex.unidad, titulo:ex.titulo||'Examen de redacción', preguntas:[], material_url:ex.material_url||null, material_modo:ex.material_modo||'inline', cuentaFinal:!!ex.cuenta_final};
-  current.unit=ex.unidad; current.mode='redaccion';
+  current.unit=ex.unidad; current.mode='redaccion'; window._redVigilando=false;
   showView('exam'); window.scrollTo(0,0);
   $('exam').innerHTML='<div class="loader"><span class="spin"></span></div>';
   try{
@@ -6570,6 +6570,7 @@ function renderRedaccion(entrega){
   const h=[`<button class="backbtn" onclick="backToUnit()">← Volver</button>`];
   h.push(`<h1 style="font-size:1.2rem;font-weight:800;letter-spacing:-.3px;margin:6px 0 2px;color:var(--navy)">${escHtml(redCurrent.titulo)}</h1>`);
   h.push(`<p style="font-size:.8rem;color:var(--ink-soft);margin-bottom:16px">${editable?'Escribe tus respuestas y pulsa <b>Entregar</b>. Solo puedes entregar una vez; tu profesor las corregirá y pondrá la nota.':'Examen de redacción.'}</p>`);
+  if(window._redVigilando){ h.push(`<div class="t-note" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;font-size:.8rem;margin-bottom:12px">🔒 <b>Examen vigilado.</b> Si cambias de aplicación o bloqueas el móvil, se entregará automáticamente con lo que lleves escrito.</div>`); }
   if(redCurrent.material_url){ h.push(materialViewerHtml(redCurrent.material_url, redCurrent.material_modo, 'Ver material del examen')); }
   if(corregido){
     const n=(entrega.nota!=null)?(+entrega.nota).toFixed(1):'—', pass=(+entrega.nota>=5);
@@ -6635,6 +6636,7 @@ function renderInstruccionesRedaccion(entrega){
 // pantalla tiene consecuencias (ya avisadas y aceptadas).
 function comenzarRedaccionOficial(entrega){
   window._redEntregado=false;
+  window._redVigilando=true;
   history.pushState({redBlock:true}, '');
   window._redPopHandler=function(e){
     history.pushState({redBlock:true}, '');
@@ -7297,6 +7299,7 @@ function backToUnit(){
     window.removeEventListener('pagehide', window._redHideHandler);
     window._redHideHandler = null;
   }
+  window._redVigilando = false;
   if(current.unit){ openUnit(current.unit); } else { goHome(); }
 }
 
