@@ -6498,13 +6498,31 @@ async function openRedaccion(examId){
       <div class="bar"><button class="btn btn-ghost" onclick="backToUnit()">← Volver</button></div>`;
   }
 }
+// Visor de material del examen: overlay a pantalla completa DENTRO de la pestaña.
+// No usa target="_blank": así no oculta la pestaña y no dispara el antifraude.
+function verMaterialExamen(url){
+  if(!url) return;
+  if(document.getElementById('mat-overlay')) return;
+  const ov=document.createElement('div');
+  ov.id='mat-overlay';
+  ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(20,22,40,.94);display:flex;flex-direction:column;padding:10px;box-sizing:border-box';
+  ov.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;color:#fff">
+      <b style="font-size:.9rem">📄 Material del examen</b>
+      <button type="button" onclick="cerrarMaterialExamen()" style="background:#fff;border:0;border-radius:9px;padding:7px 14px;font-family:inherit;font-weight:700;cursor:pointer;color:var(--navy)">✕ Cerrar</button>
+    </div>
+    <iframe src="${escAttr(url)}" style="flex:1;width:100%;border:0;border-radius:10px;background:#fff"></iframe>
+    <div style="margin-top:6px;text-align:center"><a href="${escAttr(url)}" download style="color:#cbd5e1;font-size:.78rem;text-decoration:underline">Descargar el PDF</a></div>`;
+  document.body.appendChild(ov);
+}
+function cerrarMaterialExamen(){ const ov=document.getElementById('mat-overlay'); if(ov) ov.remove(); }
+
 function materialViewerHtml(url, modo, label){
   if(!url) return '';
   const u=escAttr(url), lbl=escHtml(label||'Ver material');
   if(modo==='boton'){
-    return `<div style="margin:8px 0"><a class="btn btn-ghost" href="${u}" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">📄 ${lbl}</a></div>`;
+    return `<div style="margin:8px 0"><button type="button" class="btn btn-ghost" onclick="verMaterialExamen('${u}')" style="display:inline-block">📄 ${lbl}</button></div>`;
   }
-  return `<div style="margin:8px 0"><iframe src="${u}" style="width:100%;height:420px;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe><div style="margin-top:4px"><a href="${u}" target="_blank" rel="noopener" style="font-size:.78rem">Abrir el PDF en una pestaña nueva</a></div></div>`;
+  return `<div style="margin:8px 0"><iframe src="${u}" style="width:100%;height:420px;border:1px solid var(--line);border-radius:10px;background:#fff"></iframe><div style="margin-top:4px"><button type="button" onclick="verMaterialExamen('${u}')" style="background:none;border:0;color:var(--navy);font-size:.78rem;cursor:pointer;text-decoration:underline;padding:0;font-family:inherit">Ver a pantalla completa</button></div></div>`;
 }
 function renderRedaccion(entrega){
   const estado = entrega ? entrega.estado : null;
