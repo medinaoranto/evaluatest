@@ -144,7 +144,6 @@ details p{margin-top:10px;font-size:.88rem;color:var(--ink-soft)}
 @media(min-width:760px){ .shots{grid-template-columns:repeat(3,1fr)} }
 .shot{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:12px;text-align:center}
 .shot img{width:100%;max-width:280px;height:auto;border-radius:10px;border:1px solid var(--line);display:block;margin:0 auto 10px}
-.shot-aa{width:100%;max-width:240px;height:auto;aspect-ratio:520/1033;object-fit:contain;border-radius:10px;border:1px solid var(--line);display:block;margin:0 auto 14px}
 .shot b{display:block;color:var(--navy);font-size:.9rem}
 .shot span{font-size:.8rem;color:var(--ink-soft)}
 .hero-shot{display:none}
@@ -166,6 +165,9 @@ footer li{margin-bottom:6px}
 .rs-ico:hover{background:var(--honey);color:#fff}
 .legal{border-top:1px solid rgba(255,255,255,.14);padding-top:18px;font-size:.76rem;color:#8f95bf;line-height:1.7}
 </style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://aptuvia.es/#org","name":"Aptuvia","alternateName":"Aptuvia Exámenes","url":"https://aptuvia.es/","logo":{"@type":"ImageObject","url":"https://aptuvia.es/icon-192.png","width":192,"height":192},"image":"https://aptuvia.es/icon-192.png","description":"Plataforma de exámenes para academias de certificados de profesionalidad, profesores y opositores.","email":"contacto@aptuvia.es"},{"@type":"WebSite","@id":"https://aptuvia.es/#website","name":"Aptuvia","url":"https://aptuvia.es/","publisher":{"@id":"https://aptuvia.es/#org"},"inLanguage":"es-ES"}]}
+</script>
 </head>
 <body>
 
@@ -356,7 +358,7 @@ footer li{margin-bottom:6px}
         <a class="btn btn-out" href="/app.html#demo">Ver Aula Abierta en la demo</a>
       </div>
       <div class="card" style="border-color:var(--celeste);background:var(--celeste-1)">
-        <img src="/img/captura-aula-abierta.jpg?v=2" alt="Panel del profesor en Aula Abierta" loading="lazy" decoding="async" class="shot-aa">
+        <img src="/img/captura-aula-abierta.jpg" alt="Panel del profesor en Aula Abierta" loading="lazy" decoding="async" width="520" height="1033" style="width:100%;max-width:240px;border-radius:10px;border:1px solid var(--line);display:block;margin:0 auto 14px">
         <h3 style="margin-bottom:12px">Un profesor puede tener</h3>
         <p style="margin-bottom:8px">✓ Varias materias a la vez, cada una con sus temas</p>
         <p style="margin-bottom:8px">✓ Sus propias preguntas y sus propias explicaciones</p>

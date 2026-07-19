@@ -3178,14 +3178,13 @@ async function gxRender(){
 }
 
 function gxPintar(){
+  if(gxTab==='avisos') gxTab='facturas';
   let h=`<button class="backbtn" onclick="saSetMain('fact')" style="margin-bottom:10px">← Gestión</button>
     <h2 style="font-size:1.05rem;font-weight:800;color:var(--navy);margin:2px 2px 12px">Gastos y balance</h2>`;
   h+=`<div class="t-toggle" style="margin-bottom:14px">
     ${[['facturas','Facturas'],['prev','Previstos'],['provs','Proveedores'],['balance','Balance']]
       .map(([k,l])=>`<button class="${gxTab===k?'on':''}" onclick="gxSetTab('${k}')" style="font-size:.62rem;padding:8px 2px">${l}</button>`).join('')}
-    <button class="${gxTab==='avisos'?'on':''}" onclick="gxSetTab('avisos')" title="Avisos archivados" style="flex:0 0 auto;padding:8px 8px">🔔${gxArch.length?`<span style="font-size:.62rem;font-weight:800;background:var(--honey);color:#fff;border-radius:8px;padding:0 4px;margin-left:3px">${gxArch.length}</span>`:''}</button>
   </div>`;
-  if(gxTab!=='avisos') h+=gxAvisos();
   if(gxTab==='facturas') h+=gxTabFacturas();
   else if(gxTab==='prev') h+=gxTabPrev();
   else if(gxTab==='provs') h+=gxTabProvs();
@@ -3329,9 +3328,10 @@ function gxTabFacturas(){
       <b style="font-size:.85rem;color:var(--navy)">${gxEur(tM)}</b></button>`;
     if(!ab) return;
     h+=`<div class="gx-tabla-wrap" style="margin-bottom:6px"><table class="gx-tabla">
-      <thead><tr><th>Fecha</th><th>Proveedor</th><th>Nº factura</th><th>Concepto</th><th>Categoría</th><th style="text-align:right">Base</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th><th></th></tr></thead><tbody>`;
+      <thead><tr><th style="text-align:center">PDF</th><th>Fecha</th><th>Proveedor</th><th>Nº factura</th><th>Concepto</th><th>Categoría</th><th style="text-align:right">Base</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th><th></th></tr></thead><tbody>`;
     arr.forEach(g=>{
       h+=`<tr>
+        <td style="text-align:center">${g.pdf_url?`<button class="gx-mini" onclick="gxVerPDF('${escAttr(g.pdf_url)}')" title="Original subido — toca para verlo" style="background:#dcfce7;border:1px solid #15803d;color:#15803d">✔</button>`:`<button class="gx-mini" onclick="gxEditar('${g.id}')" title="Falta subir el original — toca para adjuntarlo" style="background:#fdeaea;border:1px solid #dc2626;color:#dc2626">✕</button>`}</td>
         <td>${escHtml(g.fecha||'')}</td>
         <td>${escHtml(gxProvNombre(g.proveedor_id))}</td>
         <td>${escHtml(g.numero||'—')}</td>
@@ -3342,7 +3342,6 @@ function gxTabFacturas(){
         <td style="text-align:right;font-weight:700;white-space:nowrap">${gxEur(g.importe)}</td>
         <td style="white-space:nowrap;text-align:right">
           <button class="gx-mini ${g.pagada?'ok':''}" onclick="gxTogglePagada('${g.id}',${g.pagada?'false':'true'})">${g.pagada?'✅':'○'}</button>
-          ${g.pdf_url?`<button class="gx-mini" onclick="gxVerPDF('${escAttr(g.pdf_url)}')">📄</button>`:''}
           <button class="gx-mini" onclick="gxEditar('${g.id}')">✏️</button>
           <button class="gx-mini" onclick="gxDuplicar('${g.id}')" title="Duplicar">⧉</button>
           <button class="gx-mini del" onclick="gxBorrar('${g.id}')">🗑</button>
@@ -4025,6 +4024,7 @@ async function factGuardarDatos(){
 }
 
 async function factBorrar(id){
+  if(await factRealOn()){ appAlert('🔒 Facturación real activada: las facturas emitidas no pueden borrarse. Emite una rectificativa.'); return; }
   if(!await appConfirm('¿Borrar esta factura guardada? No se puede deshacer.')) return;
   try{
     await call('/rest/v1/rpc/sa_borrar_factura',{method:'POST',body:{p_id:id}});
@@ -4222,7 +4222,8 @@ function saPintarFacturasEmitidas(){
   const mesNomSel=(mk)=>{ const [y,m]=mk.split('-'); const n=new Date(+y,+m-1,1).toLocaleDateString('es-ES',{month:'long',year:'numeric'}); return n.charAt(0).toUpperCase()+n.slice(1); };
 
   let h=`<button class="backbtn" onclick="saSetMain('fact')" style="margin-bottom:10px">← Gestión</button>
-    <h2 style="font-size:1.05rem;font-weight:800;color:var(--navy);margin:2px 2px 10px">📊 Facturas emitidas</h2>`;
+    <h2 style="font-size:1.05rem;font-weight:800;color:var(--navy);margin:2px 2px 10px">📊 Facturas emitidas</h2>
+    <div id="fr-box" style="margin:2px 0 12px"></div>`;
 
   // Filtro por mes
   h+=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
@@ -4261,7 +4262,7 @@ function saPintarFacturasEmitidas(){
   h+=`<button onclick="factResumenPDF()" style="width:100%;margin-bottom:14px;background:var(--honey-tint);border:1.5px solid var(--honey);color:var(--navy);font-weight:700;border-radius:12px;padding:11px;cursor:pointer;font-family:inherit;font-size:.88rem">📄 Descargar PDF de esta selección</button>`;
   h+=`<button onclick="driveAbrir()" style="width:100%;margin-bottom:14px;margin-top:-6px;background:#fff;border:1.5px solid var(--line);color:var(--navy);font-weight:700;border-radius:12px;padding:10px;cursor:pointer;font-family:inherit;font-size:.82rem">📁 Abrir Drive para guardarlo</button>`;
 
-  if(!lista.length){ h+=`<p class="sa-empty">No hay facturas para este filtro.</p>`; $('teacher').innerHTML=saShell(h); return; }
+  if(!lista.length){ h+=`<p class="sa-empty">No hay facturas para este filtro.</p>`; $('teacher').innerHTML=saShell(h); saPintarFactReal(); return; }
 
   // Agrupar por mes (YYYY-MM)
   const meses={};
@@ -4302,12 +4303,14 @@ function saPintarFacturasEmitidas(){
           <button onclick="saToggleFactura('${f.id}','pagada',${f.pagada?'false':'true'})" style="font-size:.72rem;padding:5px 10px;border-radius:14px;cursor:pointer;border:1.5px solid ${f.pagada?'#15803d':'#cbd5e1'};background:${f.pagada?'#dcfce7':'#fff'};color:${f.pagada?'#15803d':'var(--ink-soft)'};font-weight:700">${f.pagada?'✅ Pagada':'○ Pendiente'}</button>
           <button onclick="saToggleFactura('${f.id}','enviada',${f.enviada?'false':'true'})" style="font-size:.72rem;padding:5px 10px;border-radius:14px;cursor:pointer;border:1.5px solid ${f.enviada?'#2563a8':'#cbd5e1'};background:${f.enviada?'#dbeafe':'#fff'};color:${f.enviada?'#2563a8':'var(--ink-soft)'};font-weight:700">${f.enviada?'✉️ Enviada':'○ No enviada'}</button>
           ${f.enviada?'':`<button onclick="factEnviarDesdePanel('${f.id}')" style="font-size:.72rem;padding:5px 10px;border-radius:14px;cursor:pointer;border:1.5px solid var(--honey);background:var(--honey-tint);color:var(--honey-deep);font-weight:700">✉️ Enviar</button>`}
+          <button onclick="factRectificar('${f.id}')" style="font-size:.72rem;padding:5px 10px;border-radius:14px;cursor:pointer;border:1.5px solid #cbd5e1;background:#fff;color:var(--ink-soft);font-weight:700">↩️ Rectificar</button>
           <button onclick="saBorrarFacturaPanel('${f.id}')" style="font-size:.72rem;padding:5px 10px;border-radius:14px;cursor:pointer;border:1.5px solid #f3c4c4;background:#fdeaea;margin-left:auto">🗑</button>
         </div>
       </div>`;
     });
   });
   $('teacher').innerHTML=saShell(h);
+  saPintarFactReal();
   if($('fe-mes')) $('fe-mes').onchange=(e)=>{ window._factMes=e.target.value; saPintarFacturasEmitidas(); };
   if($('fe-cli')) $('fe-cli').onchange=(e)=>{ window._factCliente=e.target.value; saPintarFacturasEmitidas(); };
   if($('fe-est')) $('fe-est').onchange=(e)=>{ window._factFiltro=e.target.value; saPintarFacturasEmitidas(); };
@@ -4369,6 +4372,7 @@ async function saToggleFactura(id,campo,valor){
 }
 
 async function saBorrarFacturaPanel(id){
+  if(await factRealOn()){ appAlert('🔒 Facturación real activada: las facturas emitidas no pueden borrarse. Emite una rectificativa.'); return; }
   if(!await appConfirm('¿Borrar esta factura? No se puede deshacer.')) return;
   try{
     await call('/rest/v1/rpc/sa_borrar_factura',{method:'POST',body:{p_id:id}});
@@ -4396,6 +4400,44 @@ async function factEnviarDesdePanel(id){
 }
 
 
+
+// ── Facturación real (inalterabilidad): interruptor OFF por defecto ──
+async function factRealOn(){
+  try{ const m=await call('/rest/v1/config_app?select=valor&clave=eq.fact_real'); return !!(m&&m[0]&&m[0].valor==='on'); }catch(e){ return false; }
+}
+async function saPintarFactReal(){
+  const box=$('fr-box'); if(!box) return;
+  const on=await factRealOn();
+  box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 13px;border:1.5px solid ${on?'#f3c4c4':'var(--line)'};border-radius:12px;background:${on?'#fdeaea':'#fff'}">
+      <span style="flex:1"><b style="color:${on?'#b4232a':'var(--navy)'}">🔒 Facturación real</b><br><span style="font-size:.76rem;color:var(--ink-soft)">${on?'ACTIVA: las facturas emitidas no se borran; corrige con rectificativas.':'Apagada (modo pruebas): puedes borrar facturas. Enciéndelo el día del alta.'}</span></span>
+      <button id="fr-sw" style="flex:0 0 auto;width:52px;height:30px;border-radius:16px;border:none;cursor:pointer;background:${on?'#15803d':'#cbd5e1'};position:relative;transition:background .15s"><span style="position:absolute;top:3px;left:${on?'25px':'3px'};width:24px;height:24px;border-radius:50%;background:#fff;transition:left .15s"></span></button>
+    </div>`;
+  $('fr-sw').onclick=async ()=>{
+    if(!on && !await appConfirm('Activar Facturación real: a partir de ahora las facturas emitidas NO se podrán borrar; las correcciones se hacen con rectificativas. Actívalo solo cuando empiece la actividad real. ¿Seguro?')) return;
+    try{ await call('/rest/v1/rpc/set_fact_real',{method:'POST',body:{p_on:!on}}); saPintarFactReal(); }
+    catch(e){ appAlert('No se pudo: '+(e.message||'')); }
+  };
+}
+async function factRectificar(id){
+  let fc; try{ const rows=await call('/rest/v1/facturas?id=eq.'+id); fc=rows&&rows[0]; }catch(e){}
+  if(!fc){ appAlert('No se encontró la factura.'); return; }
+  if(!await appConfirm('Se emitirá una rectificativa que ANULA la factura '+(fc.numero||'')+' (importes en negativo). Después emite una nueva factura correcta si procede. ¿Continuar?')) return;
+  const d=fc.cliente||{}; const L=fc.lineas||{};
+  const neg=arr=>(arr||[]).map(l=>({nombre:l.nombre, precio:-Math.abs(Number(l.precio)||0), cant:l.cant}));
+  const rec=[{nombre:'RECTIFICA factura '+(fc.numero||'')+' de fecha '+(fc.fecha||''), precio:0, cant:1}, ...neg(L.rec)];
+  const uni=neg(L.uni);
+  const numero='R-'+new Date().getFullYear()+'-'+String(Date.now()).slice(-5);
+  const fecha=new Date().toISOString().slice(0,10);
+  const r=factRenderPDF({numero,fecha,nombreCliente:d.razon_social||'',d,rec,uni,descuento:Number(fc.descuento_pct)||0,iva:Number(fc.iva_pct)||0});
+  if(!r) return;
+  try{
+    const payload={ academia_id:fc.academia_id, profesor_id:fc.profesor_id||null, numero, fecha, cliente:d, lineas:{rec,uni}, subtotal:+r.subtotal.toFixed(2), descuento_pct:Number(fc.descuento_pct)||0, iva_pct:Number(fc.iva_pct)||0, total:+r.total.toFixed(2) };
+    const nid=await call('/rest/v1/rpc/sa_guardar_factura',{method:'POST',body:{p_factura:payload}});
+    window._factTodas=window._factTodas||[];
+    window._factTodas.unshift({id:(typeof nid==='string'?nid:(nid&&nid[0])||''), numero, fecha, total:+r.total.toFixed(2), academia_nombre:fc.academia_nombre||d.razon_social||'—', pagada:false, enviada:false});
+    saPintarFacturasEmitidas();
+  }catch(e){ appAlert('La rectificativa se descargó, pero no se pudo guardar: '+(e.message||'')); }
+}
 
 function pintarTeacher(){
   showView('teacher'); window.scrollTo(0,0);
@@ -4857,6 +4899,7 @@ function renderExamMgmt(okMsg,errMsg){
   h.push(`<button class="backbtn" onclick="pintarTeacher()">← Resultados</button>`);
   h.push(`<h1 style="font-size:1.25rem;font-weight:800;letter-spacing:-.4px;margin:6px 0 2px;color:var(--navy)">Gestión de exámenes</h1>`);
   h.push(`<p style="font-size:.8rem;color:var(--ink-soft);margin-bottom:14px">Genera un examen por tema o monta uno a medida con tus propias preguntas. Aparece para el alumnado al instante.</p>`);
+  h.push(`<button onclick="driveAbrir()" style="width:100%;background:#fff;border:1.5px solid var(--line);color:var(--navy);font-weight:700;border-radius:12px;padding:10px;margin-bottom:14px;cursor:pointer;font-family:inherit;font-size:.82rem">📁 Abrir Drive (materiales de exámenes)</button>`);
   if(okMsg) h.push(`<div class="t-note ok">${okMsg}</div>`);
   if(errMsg) h.push(`<div class="t-note err">${errMsg}</div>`);
   h.push(`<div class="t-toggle" style="margin-bottom:14px"><button id="kd-test" class="${builder.kind==='test'?'on':''}">📝 Test</button><button id="kd-red" class="${builder.kind==='redaccion'?'on':''}">✍️ Redacción</button><button id="kd-imp" class="${builder.kind==='importar'?'on':''}">📋 Pegar examen</button></div>`);
