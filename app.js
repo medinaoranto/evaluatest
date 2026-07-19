@@ -902,7 +902,16 @@ function applyTema(certId){
   if(tema) document.body.classList.add(tema);
 }
 
-function logout(){
+async function logout(){
+  if(current.mode==='redaccion' && window._redVigilando && !window._redEntregado){
+    if(!await appConfirm('Estás en un examen oficial de redacción.\n\nSi sales ahora, se entregará con lo que lleves escrito y no podrás volver a entregarlo.\n\n¿Salir y entregar?')) return;
+    window._redEntregado=true;
+    await entregarRedaccionAuto();
+    if(window._redPopHandler){ window.removeEventListener('popstate', window._redPopHandler); window._redPopHandler=null; }
+    if(window._redVisHandler){ document.removeEventListener('visibilitychange', window._redVisHandler); window._redVisHandler=null; }
+    if(window._redHideHandler){ window.removeEventListener('pagehide', window._redHideHandler); window._redHideHandler=null; }
+    window._redVigilando=false;
+  }
   limpiarSesion();
   token=null; refreshToken=null; userEmail=''; userName=''; userRol=''; userId=''; userAcademia=null; userProfesorId=null; unidadesById={}; examsByUnit={}; attemptsByExam={}; falladasByUnit={}; entregasByExam={};
   window._saImpersona=false; window._saImpersonaProf=null; window._saImpersonaAcademia=null;
@@ -6567,7 +6576,7 @@ function renderRedaccion(entrega){
   const corregido = estado==='corregido';
   const editable = !entrega || estado==='reabierto';
   const prev={}; if(entrega&&Array.isArray(entrega.respuestas)) entrega.respuestas.forEach(r=>{ prev[r.pregunta_id]=r.texto||''; });
-  const h=[`<button class="backbtn" onclick="backToUnit()">← Volver</button>`];
+  const h=[`<button class="backbtn" onclick="${window._redVigilando?'intentarSalirRedaccion()':'backToUnit()'}">← Volver</button>`];
   h.push(`<h1 style="font-size:1.2rem;font-weight:800;letter-spacing:-.3px;margin:6px 0 2px;color:var(--navy)">${escHtml(redCurrent.titulo)}</h1>`);
   h.push(`<p style="font-size:.8rem;color:var(--ink-soft);margin-bottom:16px">${editable?'Escribe tus respuestas y pulsa <b>Entregar</b>. Solo puedes entregar una vez; tu profesor las corregirá y pondrá la nota.':'Examen de redacción.'}</p>`);
   if(window._redVigilando){ h.push(`<div class="t-note" style="background:#fee2e2;color:#991b1b;border-color:#fca5a5;font-size:.8rem;margin-bottom:12px">🔒 <b>Examen vigilado.</b> Si cambias de aplicación o bloqueas el móvil, se entregará automáticamente con lo que lleves escrito.</div>`); }
