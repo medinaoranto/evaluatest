@@ -4988,6 +4988,7 @@ h.push(`<label>Tema</label><select id="ce-tema">${tOpts}</select><button class="
   const cb=$('ce-btn'); if(cb) cb.onclick=crearAutoUI;
   wireBuilder();
   $('teacher').querySelectorAll('[data-del]').forEach(b=> b.onclick=()=>borrarExamenUI(b.dataset.del));
+  $('teacher').querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=>editarCabeceraUI(b.dataset.edit));
 }
 function listaProfHtml(units){
   let any=false, list='';
@@ -5000,7 +5001,7 @@ function listaProfHtml(units){
     });
     if(!prof.length) return; any=true;
     list+=`<div class="t-name" style="margin-top:4px">${unidadesById[u]?unidadesById[u].codigo:u}</div>`;
-    prof.forEach(e=>{ const badge=e.tipo==='redaccion'?'<span class="rbadge">Redacción</span> ':''; list+=`<div class="ce-row"><span class="ce-info"><b>${badge}${escHtml(e.titulo)}</b><span>Nivel ${e.nivel||'—'}</span></span><button class="ce-del" data-del="${e.id}" data-acad="${e.academia_id==null?'':e.academia_id}" aria-label="Borrar">🗑</button></div>`; });
+    prof.forEach(e=>{ const badge=e.tipo==='redaccion'?'<span class="rbadge">Redacción</span> ':''; list+=`<div class="ce-row"><span class="ce-info"><b>${badge}${escHtml(e.titulo)}</b><span>Nivel ${e.nivel||'—'}${e.cuenta_final?' · Nota final':''}</span></span><button class="ce-del" data-edit="${e.id}" data-acad="${e.academia_id==null?'':e.academia_id}" aria-label="Editar" style="background:#eef2ff;border-color:#c7d2fe;margin-right:6px">✏️</button><button class="ce-del" data-del="${e.id}" data-acad="${e.academia_id==null?'':e.academia_id}" aria-label="Borrar">🗑</button></div>`; });
   });
   return any?list:`<div class="center-msg" style="padding:18px">Aún no has creado exámenes.</div>`;
 }
@@ -5210,6 +5211,45 @@ async function borrarExamenUI(id){
     await refrescarExamenes();
     renderExamMgmt('Examen borrado correctamente.');
   }catch(err){ renderExamMgmt(null,'No se pudo borrar: '+(err.message||'')); }
+}
+// ---- Editar cabecera del examen (Alcance C · capa 1: título, nivel, cuenta_final) ----
+function editarCabeceraUI(id){
+  const ex=[].concat(...Object.values(examsByUnit)).find(e=>e.id===id);
+  if(!ex){ appAlert('No se encontró el examen.'); return; }
+  if(ex.academia_id!=null && userAcademia!=null && String(ex.academia_id)!==String(userAcademia) && !window._saImpersona){
+    appAlert('Este examen pertenece a otra academia y no puedes editarlo.'); return;
+  }
+  renderEditarCabecera(ex);
+}
+function renderEditarCabecera(ex){
+  showView('teacher'); window.scrollTo(0,0);
+  const tipo=ex.tipo==='redaccion'?'Redacción':'Test';
+  const uCod=unidadesById[ex.unidad]?unidadesById[ex.unidad].codigo:ex.unidad;
+  $('teacher').innerHTML=`
+    <button class="backbtn" onclick="renderExamMgmt()">← Gestión de exámenes</button>
+    <h1 style="font-size:1.25rem;font-weight:800;letter-spacing:-.4px;margin:6px 0 2px;color:var(--navy)">Editar examen</h1>
+    <p style="font-size:.8rem;color:var(--ink-soft);margin-bottom:14px">${tipo} · ${escHtml(uCod||'')}</p>
+    <div class="t-card">
+      <label style="margin-top:6px">Título</label>
+      <input id="ed-tit" type="text" value="${escAttr(ex.titulo||'')}">
+      <label>Nivel</label>
+      <select id="ed-niv"><option value="medio"${ex.nivel!=='alto'?' selected':''}>Medio</option><option value="alto"${ex.nivel==='alto'?' selected':''}>Alto</option></select>
+      <label class="ckrow" style="margin-top:12px"><input type="checkbox" id="ed-fin"${ex.cuenta_final?' checked':''}> Cuenta para la nota final</label>
+      <button class="btn btn-honey" id="ed-save" style="margin-top:16px">Guardar cambios</button>
+    </div>`;
+  $('ed-save').onclick=()=>guardarCabeceraUI(ex.id);
+}
+async function guardarCabeceraUI(id){
+  const tit=($('ed-tit').value||'').trim();
+  const niv=$('ed-niv').value==='alto'?'alto':'medio';
+  const fin=$('ed-fin').checked;
+  if(!tit){ appAlert('El título no puede estar vacío.'); return; }
+  const btn=$('ed-save'); btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
+  try{
+    await call('/rest/v1/rpc/actualizar_examen_cabecera',{method:'POST',body:{p_examen_id:id, p_titulo:tit, p_nivel:niv, p_cuenta_final:fin}});
+    await refrescarExamenes();
+    renderExamMgmt('✅ Examen actualizado.');
+  }catch(err){ btn.disabled=false; btn.textContent='Guardar cambios'; appAlert('No se pudo guardar: '+(err.message||'')); }
 }
 
 async function borrarMateriaUI(unidadId, titulo){
