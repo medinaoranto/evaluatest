@@ -1532,7 +1532,7 @@ function aiPanel(area,vis){
           <span style="margin-left:auto;font-size:.62rem;color:var(--ink-soft)">${escHtml(f)}</span>
         </div>
         <div style="display:flex;align-items:flex-start;gap:8px">
-          <span style="flex:1;font-size:.8rem;color:var(--ink)">${escHtml(a.texto)}</span>
+          <span style="flex:1;min-width:0;overflow-wrap:anywhere;word-break:break-word;font-size:.8rem;color:var(--ink)">${escHtml(a.texto)}</span>
           ${nuevo?`<button onclick="aiLeido('${escAttr(String(a.id))}')" title="Marcar leído" style="flex:0 0 auto;background:#eaf3fb;border:1px solid #5aa9d6;border-radius:6px;padding:1px 6px;font-size:.66rem;color:#1d4f78;cursor:pointer">✓</button>`:''}
           <button onclick="aiBorrar('${escAttr(String(a.id))}')" title="Borrar" style="flex:0 0 auto;background:#fff;border:1px solid var(--line);border-radius:6px;width:20px;height:20px;line-height:1;font-size:.72rem;color:var(--ink-soft);cursor:pointer;padding:0">🗑</button>
         </div>
@@ -2113,7 +2113,7 @@ function rsTabRedactor(r){
     </div>
     <p style="font-size:.7rem;color:var(--ink-soft);margin:9px 0 0;line-height:1.45">Copia el prompt → pégalo en Claude → revisa el texto → tráelo aquí abajo y guárdalo.</p>
   </div>`;
-  h+=`<div class="gx-form">
+  h+=`<div class="gx-form gx-form-1col">
     <label>Texto de la publicación</label>
     <textarea id="rs-txt" rows="9" style="padding:10px;border:1.5px solid var(--line);border-radius:10px;font-size:.88rem;font-family:inherit;resize:vertical">${escHtml(p.texto||'')}</textarea>
     <div id="rs-cont" style="font-size:.72rem;color:var(--ink-soft);text-align:right;margin-top:-4px"></div>
@@ -2127,11 +2127,10 @@ function rsTabRedactor(r){
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
     <button class="btn btn-primary" onclick="rsGuardar()" style="flex:1 1 100%">${p.id?'Guardar cambios':'Guardar'}</button>
     <button class="gx-mini" onclick="rsCopiar()" style="flex:1;padding:10px">📋 Copiar</button>
-    <button class="gx-mini" onclick="rsCompartir()" style="flex:1;padding:10px">📤 Compartir</button>
     <a href="${escAttr(r.url)}" target="_blank" rel="noopener" class="gx-mini" style="flex:1;padding:10px;text-align:center;text-decoration:none;line-height:1.6">Abrir ${escHtml(r.nombre)} ↗</a>
   </div>
   ${p.id?`<button class="gx-mini" onclick="rsNuevo()" style="width:100%;margin-top:8px;padding:10px">✚ Nueva publicación</button>`:''}
-  <p style="font-size:.72rem;color:var(--ink-soft);margin-top:12px;line-height:1.5">Para publicar: copia o comparte el texto y pégalo en ${escHtml(r.nombre)}. Luego márcalo como publicado y anota las métricas en Historial.</p>`;
+  <p style="font-size:.72rem;color:var(--ink-soft);margin-top:12px;line-height:1.5">Para publicar: copia el texto y pégalo en ${escHtml(r.nombre)}. Luego márcalo como publicado y anota las métricas en Historial.</p>`;
   return h;
 }
 function rsTabCal(r){
@@ -3350,10 +3349,10 @@ function gxTabFacturas(){
         <td style="text-align:right;white-space:nowrap;color:${g.deducible===false?'var(--ink-soft)':'#15803d'}">${g.iva!=null?gxEur(g.iva):'—'}</td>
         <td style="text-align:right;font-weight:700;white-space:nowrap">${gxEur(g.importe)}</td>
         <td style="white-space:nowrap;text-align:right">
-          <button class="gx-mini ${g.pagada?'ok':''}" onclick="gxTogglePagada('${g.id}',${g.pagada?'false':'true'})">${g.pagada?'✅':'○'}</button>
-          <button class="gx-mini" onclick="gxEditar('${g.id}')">✏️</button>
+          <button class="gx-mini ${g.pagada?'ok':''}" onclick="gxTogglePagada('${g.id}',${g.pagada?'false':'true'})" title="${g.pagada?'Pagada — marcar como pendiente':'Marcar como pagada'}">${g.pagada?'✅':'○'}</button>
+          <button class="gx-mini" onclick="gxEditar('${g.id}')" title="Editar">✏️</button>
           <button class="gx-mini" onclick="gxDuplicar('${g.id}')" title="Duplicar">⧉</button>
-          <button class="gx-mini del" onclick="gxBorrar('${g.id}')">🗑</button>
+          <button class="gx-mini del" onclick="gxBorrar('${g.id}')" title="Borrar">🗑</button>
         </td></tr>`;
     });
     h+=`</tbody></table></div>`;
@@ -4923,6 +4922,7 @@ function renderExamMgmt(okMsg,errMsg){
     const ki4=$('kd-imp'); if(ki4) ki4.onclick=()=>setKind('importar');
     wireRed();
     $('teacher').querySelectorAll('[data-del]').forEach(b=> b.onclick=()=>borrarExamenUI(b.dataset.del));
+    $('teacher').querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=>editarCabeceraUI(b.dataset.edit));
     return;
   }
   // ── Bloque IMPORTAR ──
@@ -4963,6 +4963,7 @@ D) Opción
     const ki3=$('kd-imp'); if(ki3) ki3.onclick=()=>setKind('importar');
     wireImportarKind();
     $('teacher').querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>borrarExamenUI(b.dataset.del));
+    $('teacher').querySelectorAll('[data-edit]').forEach(b=> b.onclick=()=>editarCabeceraUI(b.dataset.edit));
     return;
   }
   h.push(`<div class="t-toggle" style="margin-bottom:14px"><button id="md-auto" class="${builder.mode==='auto'?'on':''}">Automático</button><button id="md-med" class="${builder.mode==='medida'?'on':''}">A medida</button></div>`);
@@ -8146,20 +8147,24 @@ function demoSalir(){
   location.reload();
 }
 function demoPortal(){
-  const h=`<div class="portal-card" style="text-align:left">
-    <h2 style="margin-bottom:6px">Demo de Aptuvia</h2>
-    <p style="margin-bottom:12px">Vas a ver la plataforma por dentro, sin registrarte y sin dejar ningún dato.</p>
-    <div style="border:1.5px solid var(--honey);background:#f4fbf5;border-radius:12px;padding:12px;margin-bottom:14px">
-      <p style="margin:0 0 8px;font-size:.85rem"><b>Todo lo que vas a ver es inventado.</b> La academia, los profesores, los alumnos, las preguntas, las respuestas y las notas son ficticios, creados solo para esta demostración. No son contenido real de ningún curso ni de ninguna academia.</p>
-      <p style="margin:0;font-size:.85rem">La <b>estructura</b> sí es real: módulos y unidades formativas tal y como los verías el primer día.</p>
+  const h=`<div class="portal-card demo2" style="text-align:left">
+    <div class="demo2-info">
+      <h2 style="margin-bottom:6px">Demo de Aptuvia</h2>
+      <p style="margin-bottom:12px">Vas a ver la plataforma por dentro, sin registrarte y sin dejar ningún dato.</p>
+      <div style="border:1.5px solid var(--honey);background:#f4fbf5;border-radius:12px;padding:12px;margin-bottom:14px">
+        <p style="margin:0 0 8px;font-size:.85rem"><b>Todo lo que vas a ver es inventado.</b> La academia, los profesores, los alumnos, las preguntas, las respuestas y las notas son ficticios, creados solo para esta demostración. No son contenido real de ningún curso ni de ninguna academia.</p>
+        <p style="margin:0;font-size:.85rem">La <b>estructura</b> sí es real: módulos y unidades formativas tal y como los verías el primer día.</p>
+      </div>
+      <p style="font-size:.85rem;margin-bottom:0">Es un recorrido de <b>solo lectura</b>: puedes moverte por todas las pantallas, pero nada se guarda.</p>
     </div>
-    <p style="font-size:.85rem;margin-bottom:14px">Es un recorrido de <b>solo lectura</b>: puedes moverte por todas las pantallas, pero nada se guarda.</p>
-    <button class="btn btn-portal" onclick="demoEntrar('prof')"      style="background:linear-gradient(to right,#fdf1dd,#f3cf8e);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Profesor · Aptuvia</button>
-    <button class="btn btn-portal" onclick="demoEntrar('alumno')"    style="background:linear-gradient(to right,#fdf1dd,#f3cf8e);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Alumno · Aptuvia</button>
-    <button class="btn btn-portal" onclick="demoEntrar('aa-prof')"   style="background:linear-gradient(to right,#eaf6fd,#7fc3e8);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Profesor · Aula Abierta</button>
-    <button class="btn btn-portal" onclick="demoEntrar('aa-alumno')" style="background:linear-gradient(to right,#eaf6fd,#7fc3e8);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Alumno · Aula Abierta</button>
-    <button class="btn btn-ghost btn-portal" onclick="location.href='/'">← Volver</button>
-    <p style="font-size:.75rem;color:var(--ink-soft);margin-top:12px">¿Prefieres verlo con tu certificado y tus contenidos? Escríbenos a contacto@aptuvia.es</p>
+    <div class="demo2-btns">
+      <button class="btn btn-portal" onclick="demoEntrar('prof')"      style="background:linear-gradient(to right,#fdf1dd,#f3cf8e);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Profesor · Aptuvia</button>
+      <button class="btn btn-portal" onclick="demoEntrar('alumno')"    style="background:linear-gradient(to right,#fdf1dd,#f3cf8e);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Alumno · Aptuvia</button>
+      <button class="btn btn-portal" onclick="demoEntrar('aa-prof')"   style="background:linear-gradient(to right,#eaf6fd,#7fc3e8);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Profesor · Aula Abierta</button>
+      <button class="btn btn-portal" onclick="demoEntrar('aa-alumno')" style="background:linear-gradient(to right,#eaf6fd,#7fc3e8);border:1.5px solid var(--honey);color:var(--navy);font-weight:800;margin-bottom:8px">Alumno · Aula Abierta</button>
+      <button class="btn btn-ghost btn-portal" onclick="location.href='/'">← Volver</button>
+      <p style="font-size:.75rem;color:var(--ink-soft);margin-top:12px">¿Prefieres verlo con tu certificado y tus contenidos? Escríbenos a contacto@aptuvia.es</p>
+    </div>
   </div>`;
   const cont=document.querySelector('#portal .portal-card');
   if(cont) cont.outerHTML=h;
