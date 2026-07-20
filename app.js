@@ -1389,28 +1389,42 @@ function avAreaActual(){
   return 'soporte';
 }
 // Módulo de avisos: campana por departamento. Admin ve TODO en lectura.
-let avLista=null, avArch=[], avCargando=false;
+let avLista=null, avArch=[], avManuales=[], avCargando=false;
 async function avCargar(force){
   if(avLista && !force) return;
   if(avCargando) return;
   avCargando=true;
   try{
-    const [av,ar]=await Promise.all([
+    const [av,ar,man]=await Promise.all([
       call('/rest/v1/rpc/sa_avisos',{method:'POST',body:{}}),
-      call('/rest/v1/avisos_archivados?select=*&order=archivado_en.desc')
+      call('/rest/v1/avisos_archivados?select=*&order=archivado_en.desc'),
+      call('/rest/v1/avisos_manuales?select=*&order=creado_en.desc').catch(()=>[])
     ]);
-    avLista=av||[]; avArch=ar||[];
+    avLista=av||[]; avArch=ar||[]; avManuales=man||[];
   }catch(e){ avLista=[]; avArch=[]; }
   avCargando=false;
   avPintarBarra();
 }
+function avManualesDue(){
+  const out=[]; const hoy=new Date(); hoy.setHours(0,0,0,0);
+  const jsD=hoy.getDay(); const iso=jsD===0?7:jsD;
+  const monday=new Date(hoy); monday.setDate(hoy.getDate()-(iso-1));
+  const mondayStr=monday.toISOString().slice(0,10);
+  const ym=hoy.toISOString().slice(0,7); const hoyStr=hoy.toISOString().slice(0,10);
+  (avManuales||[]).forEach(m=>{
+    if(m.activo===false) return;
+    let due=false, clave='man:'+m.id;
+    if(m.repetir==='semanal'){ if(iso>=(m.dia_semana||1)){ due=true; clave='man:'+m.id+':w'+mondayStr; } }
+    else if(m.repetir==='mensual'){ if(hoy.getDate()>=(m.dia_mes||1)){ due=true; clave='man:'+m.id+':m'+ym; } }
+    else { if(m.fecha && m.fecha<=hoyStr){ due=true; } }
+    if(due) out.push({area:m.area, urgente:false, clave, texto:m.texto, icono:'🛎'});
+  });
+  return out;
+}
 function avVisibles(area){
   const arch=new Set(avArch.map(a=>a.clave));
-  return (avLista||[]).filter(a=>{
-    if(arch.has(a.clave)) return false;
-    if(area==='soporte') return true;        // Soporte (Ber) ve todo
-    return a.area===area;
-  });
+  const pasa=a=>{ if(arch.has(a.clave)) return false; if(area==='soporte') return true; return a.area===area; };
+  return (avLista||[]).filter(pasa).concat(avManualesDue().filter(pasa));
 }
 function avPintarBarra(){
   const bar=$('av-bar'); if(!bar) return;
@@ -1440,13 +1454,79 @@ function avPanel(area,vis){
       </div>`;
     });
   }
+  // ── Recordatorios propios del área (checking, backups…) ──
+  const d=window._avMan||(window._avMan={abierto:false,texto:'',repetir:'no',fecha:'',dia_semana:1,dia_mes:1});
+  const DOW=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+  h+=`<div style="border-top:1px dashed var(--line);margin-top:10px;padding-top:9px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <b style="font-size:.72rem;color:var(--navy)">🛎 Recordatorios propios</b>
+      <button onclick="avManToggleForm()" style="background:#eef4fb;border:1px solid var(--line);border-radius:7px;padding:3px 9px;font-size:.7rem;font-weight:700;color:var(--navy);cursor:pointer">${d.abierto?'Cerrar':'＋ Nuevo'}</button>
+    </div>`;
+  if(d.abierto){
+    h+=`<div style="background:#f7f9fc;border:1px solid var(--line);border-radius:9px;padding:9px;margin-top:7px">
+      <input id="avman-txt" placeholder="Ej.: Subir backup semanal a Drive" value="${escAttr(d.texto||'')}" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:.78rem;margin-bottom:6px;box-sizing:border-box">
+      <div style="display:flex;gap:6px;margin-bottom:7px">
+        <select id="avman-rep" onchange="avManSetRepetir(this.value)" style="flex:1;padding:7px;border:1px solid var(--line);border-radius:7px;font-size:.75rem">
+          <option value="no"${d.repetir==='no'?' selected':''}>Puntual (una fecha)</option>
+          <option value="semanal"${d.repetir==='semanal'?' selected':''}>Cada semana</option>
+          <option value="mensual"${d.repetir==='mensual'?' selected':''}>Cada mes</option>
+        </select>
+        ${d.repetir==='no'?`<input type="date" id="avman-fecha" value="${escAttr(d.fecha||'')}" style="flex:1;padding:6px;border:1px solid var(--line);border-radius:7px;font-size:.75rem">`:''}
+        ${d.repetir==='semanal'?`<select id="avman-dsem" style="flex:1;padding:7px;border:1px solid var(--line);border-radius:7px;font-size:.75rem">${DOW.map((n,i)=>`<option value="${i+1}"${(d.dia_semana||1)===i+1?' selected':''}>${n}</option>`).join('')}</select>`:''}
+        ${d.repetir==='mensual'?`<input type="number" id="avman-dmes" min="1" max="31" value="${d.dia_mes||1}" style="flex:1;padding:6px;border:1px solid var(--line);border-radius:7px;font-size:.75rem">`:''}
+      </div>
+      <button onclick="avManGuardar()" style="width:100%;background:var(--navy);color:#fff;border:0;border-radius:7px;padding:8px;font-size:.78rem;font-weight:700;cursor:pointer">Guardar recordatorio</button>
+    </div>`;
+  }
+  const mios=(avManuales||[]).filter(m=> area==='soporte'?true:m.area===area);
+  mios.forEach(m=>{
+    const cad = m.repetir==='semanal'?('Cada '+DOW[(m.dia_semana||1)-1]) : m.repetir==='mensual'?('Día '+(m.dia_mes||1)+' de cada mes') : ('Puntual · '+(m.fecha||'sin fecha'));
+    h+=`<div style="display:flex;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid var(--line)">
+      <button onclick="avManToggle('${escAttr(String(m.id))}',${m.activo===false})" title="${m.activo===false?'Desactivado — activar':'Activo — desactivar'}" style="flex:0 0 auto;width:15px;height:15px;border-radius:50%;border:0;cursor:pointer;background:${m.activo===false?'#e11d1d':'#16a34a'}"></button>
+      <span style="flex:1;font-size:.75rem;color:${m.activo===false?'var(--ink-soft)':'var(--ink)'}">${escHtml(m.texto)}<br><span style="font-size:.64rem;color:var(--ink-soft)">${cad}${area==='soporte'?' · '+escHtml(m.area):''}</span></span>
+      <button onclick="avManBorrar('${escAttr(String(m.id))}')" title="Borrar" style="flex:0 0 auto;background:#fff;border:1px solid var(--line);border-radius:6px;width:20px;height:20px;line-height:1;font-size:.7rem;color:var(--ink-soft);cursor:pointer;padding:0">🗑</button>
+    </div>`;
+  });
+  h+=`</div>`;
   const nArch=avArch.length;
   h+=`<button onclick="avVerArchivados()" style="width:100%;margin-top:9px;background:none;border:0;color:var(--ink-soft);font-size:.72rem;cursor:pointer;font-family:inherit;text-decoration:underline">Ver archivados${nArch?' ('+nArch+')':''}</button>`;
   return h+`</div>`;
 }
 function avToggle(){ window._avAbierta=!window._avAbierta; avPintarBarra(); }
+function avManToggleForm(){ const d=window._avMan||(window._avMan={}); d.abierto=!d.abierto; avPintarBarra(); }
+function avManSetRepetir(v){ const d=window._avMan||(window._avMan={}); const t=$('avman-txt'); if(t) d.texto=t.value; d.repetir=v; avPintarBarra(); }
+async function avManGuardar(){
+  const d=window._avMan||(window._avMan={});
+  const txt=($('avman-txt')?.value||'').trim();
+  if(!txt){ appAlert('Escribe el texto del recordatorio.'); return; }
+  const rep=$('avman-rep')?.value||'no';
+  const body={area:avAreaActual(), texto:txt, repetir:rep, activo:true, fecha:null, dia_semana:null, dia_mes:null};
+  if(rep==='no'){ const f=$('avman-fecha')?.value||''; if(!f){ appAlert('Elige una fecha.'); return; } body.fecha=f; }
+  else if(rep==='semanal'){ body.dia_semana=+($('avman-dsem')?.value||1); }
+  else if(rep==='mensual'){ let dm=+($('avman-dmes')?.value||1); dm=Math.max(1,Math.min(31,dm)); body.dia_mes=dm; }
+  try{
+    await call('/rest/v1/avisos_manuales',{method:'POST',body});
+    window._avMan={abierto:false,texto:'',repetir:'no',fecha:'',dia_semana:1,dia_mes:1};
+    await avCargar(true);
+  }catch(e){ appAlert('No se pudo guardar: '+(e.message||'')+'. ¿Ejecutaste el SQL de avisos_manuales?'); }
+}
+async function avManToggle(id,activar){
+  try{
+    await call('/rest/v1/avisos_manuales?id=eq.'+encodeURIComponent(id),{method:'PATCH',body:{activo:activar}});
+    const m=(avManuales||[]).find(x=>String(x.id)===String(id)); if(m) m.activo=activar;
+    avPintarBarra();
+  }catch(e){ appAlert('No se pudo cambiar: '+(e.message||'')); }
+}
+async function avManBorrar(id){
+  if(!await appConfirm('¿Borrar este recordatorio?')) return;
+  try{
+    await call('/rest/v1/avisos_manuales?id=eq.'+encodeURIComponent(id),{method:'DELETE'});
+    avManuales=(avManuales||[]).filter(x=>String(x.id)!==String(id));
+    avPintarBarra();
+  }catch(e){ appAlert('No se pudo borrar: '+(e.message||'')); }
+}
 async function avArchivar(clave){
-  const a=(avLista||[]).find(x=>x.clave===clave);
+  const a=(avLista||[]).find(x=>x.clave===clave) || avManualesDue().find(x=>x.clave===clave);
   try{
     await call('/rest/v1/avisos_archivados',{method:'POST',body:{clave, texto:a?a.texto:'', tipo:a?a.area:''}});
     avArch.unshift({clave, texto:a?a.texto:'', tipo:a?a.area:'', archivado_en:new Date().toISOString()});
