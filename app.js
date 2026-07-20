@@ -6433,6 +6433,7 @@ async function cargarPreviewPreguntas(examId){
   box.innerHTML='<div class="loader"><span class="spin"></span></div>';
   try{
     const qs=await call('/rest/v1/rpc/obtener_examen_profesor',{method:'POST',body:{p_examen_id:examId}})||[];
+    window._pvQs=qs;
     if(!qs.length){ box.innerHTML='<div class="center-msg">Este examen no tiene preguntas.</div>'; return; }
     const LET=['A','B','C','D','E','F'];
     let h=`<div class="pvq-count">${qs.length} pregunta${qs.length!==1?'s':''} · la correcta aparece marcada en verde</div>
@@ -6450,7 +6451,7 @@ async function cargarPreviewPreguntas(examId){
         h+=`<div class="pvq-opt${ok?' ok':''}"><span class="pvq-letra">${LET[i]||i+1}</span><span>${escHtml(o)}${ok?' ✓':''}</span></div>`;
       });
       if(q.explicacion) h+=`<div class="pvq-ex">${escHtml(q.explicacion)}</div>`;
-      h+=`<div class="pvq-actions"><button class="pvq-del" onclick="quitarPreguntaExamen('${examId}',${q.pregunta_id})">🗑 Quitar del examen</button></div>
+      h+=`<div class="pvq-actions"><button onclick="editarPreguntaUI('${examId}',${q.pregunta_id})" style="background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;border-radius:8px;padding:5px 10px;font-size:.78rem;cursor:pointer;margin-right:8px">✏️ Editar</button><button class="pvq-del" onclick="quitarPreguntaExamen('${examId}',${q.pregunta_id})">🗑 Quitar del examen</button></div>
       </div>`;
     });
     h+='</div>';
@@ -6469,6 +6470,54 @@ async function quitarPreguntaExamen(examId, preguntaId){
     if(!r.ok) throw new Error('No se pudo quitar ('+r.status+')');
     await cargarPreviewPreguntas(examId);
   }catch(err){ appAlert('Error: '+(err.message||'')); }
+}
+// ---- Editar el contenido de una pregunta (Alcance C · capa 2a) ----
+// Solo se permite si la pregunta se usa únicamente en este examen (la RPC lo
+// verifica en el servidor); si está en otros, se rechaza para no romperlos.
+function editarPreguntaUI(examId, preguntaId){
+  const q=(window._pvQs||[]).find(x=>String(x.pregunta_id)===String(preguntaId));
+  if(!q){ appAlert('No se encontró la pregunta. Vuelve a abrir las preguntas.'); return; }
+  const box=$('pv-preguntas'); if(!box) return;
+  const ops=Array.isArray(q.opciones)?q.opciones:[];
+  const LET=['A','B','C','D','E','F'];
+  let opsH='';
+  ops.forEach((o,i)=>{ opsH+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="display:flex;align-items:center;gap:5px;font-size:.82rem;white-space:nowrap"><input type="radio" name="pqe-cor" value="${i}"${i===q.respuesta_correcta?' checked':''}> ${LET[i]||i+1}</label><input class="pqe-op" type="text" value="${escAttr(o)}" style="flex:1"></div>`; });
+  box.innerHTML=`
+    <div class="t-card">
+      <div style="font-weight:800;color:var(--navy);margin-bottom:10px">Editar pregunta</div>
+      <label style="margin-top:2px">Enunciado</label>
+      <textarea id="pqe-enun" rows="3">${escHtml(q.enunciado||'')}</textarea>
+      <label style="margin-top:10px">Opciones · marca la correcta</label>
+      ${opsH}
+      <label style="margin-top:6px">Explicación (opcional)</label>
+      <textarea id="pqe-ex" rows="2">${escHtml(q.explicacion||'')}</textarea>
+      <label style="margin-top:10px">Nivel</label>
+      <select id="pqe-niv"><option value="medio"${q.nivel!=='alto'?' selected':''}>Medio</option><option value="alto"${q.nivel==='alto'?' selected':''}>Alto</option></select>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="btn btn-ghost" style="flex:1" onclick="cargarPreviewPreguntas('${examId}')">Cancelar</button>
+        <button class="btn btn-primary" id="pqe-save" style="flex:1">Guardar</button>
+      </div>
+    </div>`;
+  $('pqe-save').onclick=()=>guardarPreguntaEditUI(examId, preguntaId);
+  try{ box.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){}
+}
+async function guardarPreguntaEditUI(examId, preguntaId){
+  const enun=($('pqe-enun').value||'').trim();
+  if(!enun){ appAlert('El enunciado no puede estar vacío.'); return; }
+  const opciones=[]; let vacia=false;
+  document.querySelectorAll('.pqe-op').forEach(el=>{ const v=(el.value||'').trim(); if(!v) vacia=true; opciones.push(v); });
+  if(opciones.length<2){ appAlert('Debe haber al menos dos opciones.'); return; }
+  if(vacia){ appAlert('Ninguna opción puede quedar vacía.'); return; }
+  const corEl=document.querySelector('input[name="pqe-cor"]:checked');
+  if(!corEl){ appAlert('Marca cuál es la respuesta correcta.'); return; }
+  const correcta=+corEl.value;
+  const ex=($('pqe-ex').value||'').trim();
+  const niv=$('pqe-niv').value==='alto'?'alto':'medio';
+  const btn=$('pqe-save'); btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
+  try{
+    await call('/rest/v1/rpc/actualizar_pregunta',{method:'POST',body:{p_pregunta_id:+preguntaId, p_examen_id:examId, p_enunciado:enun, p_opciones:opciones, p_correcta:correcta, p_explicacion:ex, p_nivel:niv}});
+    await cargarPreviewPreguntas(examId);
+  }catch(err){ btn.disabled=false; btn.textContent='Guardar'; appAlert('No se pudo guardar: '+(err.message||'')); }
 }
 
 // ---- Reponer: elegir una pregunta del banco (mismo tema) y añadirla al examen ----
