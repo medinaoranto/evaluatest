@@ -1394,14 +1394,13 @@ async function avCargar(force){
   if(avLista && !force) return;
   if(avCargando) return;
   avCargando=true;
-  try{
-    const [av,ar,man]=await Promise.all([
-      call('/rest/v1/rpc/sa_avisos',{method:'POST',body:{}}),
-      call('/rest/v1/avisos_archivados?select=*&order=archivado_en.desc'),
-      call('/rest/v1/avisos_manuales?select=*&order=creado_en.desc').catch(()=>[])
-    ]);
-    avLista=av||[]; avArch=ar||[]; avManuales=man||[];
-  }catch(e){ avLista=[]; avArch=[]; }
+  window._avErrMan=null;
+  const [av,ar,man]=await Promise.all([
+    call('/rest/v1/rpc/sa_avisos',{method:'POST',body:{}}).catch(()=>[]),
+    call('/rest/v1/avisos_archivados?select=*&order=archivado_en.desc').catch(()=>[]),
+    call('/rest/v1/avisos_manuales?select=*&order=creado_en.desc').catch(e=>{ window._avErrMan=(e&&e.message)||'error'; return []; })
+  ]);
+  avLista=av||[]; avArch=ar||[]; avManuales=man||[];
   avCargando=false;
   avPintarBarra();
 }
@@ -1462,6 +1461,7 @@ function avPanel(area,vis){
       <b style="font-size:.72rem;color:var(--navy)">🛎 Recordatorios propios</b>
       <button onclick="avManToggleForm()" style="background:#eef4fb;border:1px solid var(--line);border-radius:7px;padding:3px 9px;font-size:.7rem;font-weight:700;color:var(--navy);cursor:pointer">${d.abierto?'Cerrar':'＋ Nuevo'}</button>
     </div>`;
+  if(window._avErrMan) h+=`<p style="font-size:.7rem;color:#b4232a;margin:6px 0 0">No puedo leer los recordatorios: ${escHtml(window._avErrMan)}</p>`;
   if(d.abierto){
     h+=`<div style="background:#f7f9fc;border:1px solid var(--line);border-radius:9px;padding:9px;margin-top:7px">
       <input id="avman-txt" placeholder="Ej.: Subir backup semanal a Drive" value="${escAttr(d.texto||'')}" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:7px;font-size:.78rem;margin-bottom:6px;box-sizing:border-box">
