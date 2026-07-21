@@ -1423,7 +1423,12 @@ async function avCargar(force){
   avCargando=false;
   avPintarBarra();
 }
-function avManualesDue(){
+const AV_AREAS=[['soporte','Soporte'],['admin','Administración'],['comercial','Comercial']];
+function avAreaLabel(k){ const f=AV_AREAS.find(a=>a[0]===k); return f?f[1]:k; }
+// Un recordatorio propio SOLO lo ve su dueño (m.area) y las áreas con las que lo
+// comparte explícitamente (compartida_con). Soporte ya NO ve los de los demás.
+function avManVisibleEn(m,area){ return m.area===area || (Array.isArray(m.compartida_con)&&m.compartida_con.includes(area)); }
+function avManualesDue(area){
   const out=[]; const hoy=new Date(); hoy.setHours(0,0,0,0);
   const jsD=hoy.getDay(); const iso=jsD===0?7:jsD;
   const monday=new Date(hoy); monday.setDate(hoy.getDate()-(iso-1));
@@ -1431,6 +1436,7 @@ function avManualesDue(){
   const ym=hoy.toISOString().slice(0,7); const hoyStr=hoy.toISOString().slice(0,10);
   (avManuales||[]).forEach(m=>{
     if(m.activo===false) return;
+    if(area!=null && !avManVisibleEn(m,area)) return;
     let due=false, clave='man:'+m.id;
     if(m.repetir==='semanal'){ if(iso>=(m.dia_semana||1)){ due=true; clave='man:'+m.id+':w'+mondayStr; } }
     else if(m.repetir==='mensual'){ if(hoy.getDate()>=(m.dia_mes||1)){ due=true; clave='man:'+m.id+':m'+ym; } }
@@ -1441,8 +1447,11 @@ function avManualesDue(){
 }
 function avVisibles(area){
   const arch=new Set(avArch.map(a=>a.clave));
-  const pasa=a=>{ if(arch.has(a.clave)) return false; if(area==='soporte') return true; return a.area===area; };
-  return (avLista||[]).filter(pasa).concat(avManualesDue().filter(pasa));
+  // Avisos automáticos (sa_avisos): Soporte los ve todos; el resto solo los suyos.
+  const pasaAuto=a=>{ if(arch.has(a.clave)) return false; if(area==='soporte') return true; return a.area===area; };
+  const auto=(avLista||[]).filter(pasaAuto);
+  const man=avManualesDue(area).filter(a=>!arch.has(a.clave));
+  return auto.concat(man);
 }
 function avPintarBarra(){
   const bar=$('av-bar'); if(!bar) return;
@@ -1497,14 +1506,40 @@ function avPanel(area,vis){
       <button onclick="avManGuardar()" style="width:100%;background:var(--navy);color:#fff;border:0;border-radius:7px;padding:8px;font-size:.78rem;font-weight:700;cursor:pointer">Guardar recordatorio</button>
     </div>`;
   }
-  const mios=(avManuales||[]).filter(m=> area==='soporte'?true:m.area===area);
+  const mios=(avManuales||[]).filter(m=> avManVisibleEn(m,area));
   mios.forEach(m=>{
+    const idS=String(m.id);
+    const owner = m.area===area;
     const cad = m.repetir==='semanal'?('Cada '+DOW[(m.dia_semana||1)-1]) : m.repetir==='mensual'?('Día '+(m.dia_mes||1)+' de cada mes') : ('Puntual · '+(m.fecha||'sin fecha'));
-    h+=`<div style="display:flex;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid var(--line)">
-      <button onclick="avManToggle('${escAttr(String(m.id))}',${m.activo===false})" title="${m.activo===false?'Desactivado — activar':'Activo — desactivar'}" style="flex:0 0 auto;width:15px;height:15px;border-radius:50%;border:0;cursor:pointer;background:${m.activo===false?'#e11d1d':'#16a34a'}"></button>
-      <span style="flex:1;font-size:.75rem;color:${m.activo===false?'var(--ink-soft)':'var(--ink)'}">${escHtml(m.texto)}<br><span style="font-size:.64rem;color:var(--ink-soft)">${cad}${area==='soporte'?' · '+escHtml(m.area):''}</span></span>
-      <button onclick="avManBorrar('${escAttr(String(m.id))}')" title="Borrar" style="flex:0 0 auto;background:#fff;border:1px solid var(--line);border-radius:6px;width:20px;height:20px;line-height:1;font-size:.7rem;color:var(--ink-soft);cursor:pointer;padding:0">🗑</button>
-    </div>`;
+    const comp = Array.isArray(m.compartida_con)?m.compartida_con:[];
+    if(owner){
+      const subt = cad + (comp.length?(' · compartido con '+comp.map(avAreaLabel).join(', ')):'');
+      h+=`<div style="padding:6px 0;border-bottom:1px solid var(--line)">
+        <div style="display:flex;align-items:center;gap:7px">
+          <button onclick="avManToggle('${escAttr(idS)}',${m.activo===false})" title="${m.activo===false?'Desactivado — activar':'Activo — desactivar'}" style="flex:0 0 auto;width:15px;height:15px;border-radius:50%;border:0;cursor:pointer;background:${m.activo===false?'#e11d1d':'#16a34a'}"></button>
+          <span style="flex:1;font-size:.75rem;color:${m.activo===false?'var(--ink-soft)':'var(--ink)'}">${escHtml(m.texto)}<br><span style="font-size:.64rem;color:var(--ink-soft)">${escHtml(subt)}</span></span>
+          <button onclick="avCompToggle('${escAttr(idS)}')" title="Compartir" style="flex:0 0 auto;background:${comp.length?'var(--honey-tint)':'#fff'};border:1px solid ${comp.length?'var(--honey)':'var(--line)'};border-radius:6px;height:20px;padding:0 6px;font-size:.72rem;cursor:pointer">👥</button>
+          <button onclick="avManBorrar('${escAttr(idS)}')" title="Borrar" style="flex:0 0 auto;background:#fff;border:1px solid var(--line);border-radius:6px;width:20px;height:20px;line-height:1;font-size:.7rem;color:var(--ink-soft);cursor:pointer;padding:0">🗑</button>
+        </div>`;
+      if(String(window._avCompAbierto)===idS){
+        h+=`<div style="background:#f7f9fc;border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0 2px">
+          <p style="font-size:.64rem;color:var(--ink-soft);margin:0 0 6px">Compartir con otras áreas (podrán verlo, no editarlo):</p>`;
+        AV_AREAS.filter(a=>a[0]!==m.area).forEach(a=>{
+          const on=comp.includes(a[0]);
+          h+=`<div style="display:flex;align-items:center;gap:7px;padding:3px 0">
+            <button onclick="avManCompartir('${escAttr(idS)}','${a[0]}',${!on})" title="${on?'Compartido — quitar':'Sin compartir — compartir'}" style="flex:0 0 auto;width:15px;height:15px;border-radius:50%;border:0;cursor:pointer;background:${on?'#16a34a':'#e11d1d'}"></button>
+            <span style="flex:1;font-size:.74rem;color:var(--ink)">${a[1]}</span>
+          </div>`;
+        });
+        h+=`</div>`;
+      }
+      h+=`</div>`;
+    }else{
+      h+=`<div style="display:flex;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid var(--line)">
+        <span style="flex:0 0 auto;width:15px;height:15px;border-radius:50%;background:${m.activo===false?'#e11d1d':'#16a34a'};opacity:.45"></span>
+        <span style="flex:1;font-size:.75rem;color:${m.activo===false?'var(--ink-soft)':'var(--ink)'}">${escHtml(m.texto)}<br><span style="font-size:.64rem;color:var(--ink-soft)">${cad} · compartido por ${escHtml(avAreaLabel(m.area))}</span></span>
+      </div>`;
+    }
   });
   h+=`</div>`;
   // ── Avisos por defecto: interruptor verde/rojo global ──
@@ -1571,6 +1606,17 @@ async function avManBorrar(id){
     avManuales=(avManuales||[]).filter(x=>String(x.id)!==String(id));
     avPintarBarra();
   }catch(e){ appAlert('No se pudo borrar: '+(e.message||'')); }
+}
+function avCompToggle(id){ window._avCompAbierto = (String(window._avCompAbierto)===String(id)?null:String(id)); avPintarBarra(); }
+async function avManCompartir(id, areaDest, on){
+  const m=(avManuales||[]).find(x=>String(x.id)===String(id)); if(!m) return;
+  let arr=Array.isArray(m.compartida_con)?m.compartida_con.slice():[];
+  if(on){ if(!arr.includes(areaDest)) arr.push(areaDest); }
+  else arr=arr.filter(x=>x!==areaDest);
+  try{
+    await call('/rest/v1/avisos_manuales?id=eq.'+encodeURIComponent(id),{method:'PATCH',body:{compartida_con:arr}});
+    m.compartida_con=arr; avPintarBarra();
+  }catch(e){ appAlert('No se pudo compartir: '+(e.message||'')+'. ¿Ejecutaste el ALTER de compartida_con?'); }
 }
 async function avArchivar(clave){
   const a=(avLista||[]).find(x=>x.clave===clave) || avManualesDue().find(x=>x.clave===clave);
@@ -4712,15 +4758,25 @@ async function crearMateriaUI(){
   window._nuevaMateriaTitulo=titulo; window._nuevaMateriaEtiqueta=etiqueta;
   if(!titulo){ appAlert('Escribe un nombre para la materia.'); return; }
   const btn=$('nm-crear'); btn.disabled=true; btn.innerHTML='<span class="spin"></span>';
-  const n = Object.keys(unidadesById).filter(id=>id.indexOf('aula-')===0).length + 1;
+  const miProf = window._saImpersona ? window._saImpersonaProf : userId;
+  // Numeración POR PROFESOR: mayor AULA-## de SUS materias + 1.
+  // (unidadesById trae también materias aula- de otros profes: contar todas daba
+  //  números inflados tipo AULA-06 a un profe nuevo. Robusto ante borrados.)
+  let maxN=0;
+  for(const k in unidadesById){
+    const u=unidadesById[k];
+    if(!u || String(u.id).indexOf('aula-')!==0 || u.profesor_id!==miProf) continue;
+    const mm=/AULA-(\d+)/i.exec(u.codigo||'');
+    if(mm){ const v=parseInt(mm[1],10); if(v>maxN) maxN=v; }
+  }
+  const n = maxN+1;
   const id = 'aula-'+slugify(titulo)+'-'+Date.now().toString(36).slice(-4);
-  const codigo = 'AULA-'+String(n+1).padStart(2,'0');
+  const codigo = 'AULA-'+String(n).padStart(2,'0');
   const cert = certBD(); // 'aula_abierta' cuando estamos en Aula Abierta
   // La etiqueta corta se guarda dentro del propio titulo con "|" como separador,
   // para no tocar el esquema de la BD (columna nueva = riesgo en producción).
   const tituloGuardado = etiqueta ? (etiqueta+'|'+titulo) : titulo;
   try{
-    const miProf = window._saImpersona ? window._saImpersonaProf : userId;
     await call('/rest/v1/unidades',{method:'POST',body:{id,codigo,titulo:tituloGuardado,modulo:id,orden:9000+n,certificado_id:cert,estado:'activo',profesor_id:miProf}});
     unidadesById[id]={id,codigo,titulo:tituloGuardado,modulo:id,orden:9000+n,certificado_id:cert,estado:'activo',profesor_id:miProf,ver_megatest:true,ver_falladas:true};
     examsByUnit[id]=examsByUnit[id]||[];
