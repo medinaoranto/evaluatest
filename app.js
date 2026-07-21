@@ -1785,8 +1785,8 @@ function saRenderLista(okMsg,errMsg){
     return;
   }
   h+=`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-    <button class="btn btn-honey" id="sa-nueva" style="flex:1;margin:0;min-width:130px">Nueva academia</button>
-    <button class="btn btn-ghost" id="sa-alta-presu" style="flex:1;margin:0;min-width:130px">📝 Alta desde presupuesto</button>
+    <button class="btn btn-honey" id="sa-alta-presu" style="flex:1;margin:0;min-width:130px">📝 Alta desde presupuesto</button>
+    <button class="btn btn-ghost" id="sa-nueva" style="flex:1;margin:0;min-width:130px">Nueva academia</button>
   </div>`;
   h+=`<div class="sa-cards-grid">`;
   saAcademias.forEach(a=>{
@@ -4204,7 +4204,7 @@ async function saAbrirFacturacion(academiaId){
   let presus=[];
   try{
     const all=await call('/rest/v1/presupuestos?select=*&estado=eq.aceptado&order=fecha.desc')||[];
-    presus=all.filter(p=> String(p.academia_id)===String(academiaId) || (datos.nif && p.cliente && p.cliente.nif===datos.nif));
+    presus=all.filter(p=> String(p.academia_id)===String(academiaId) || (datos.nif && p.cliente && p.cliente.nif===datos.nif) || (p.cliente && a.nombre && factNorm(p.cliente.razon_social)===factNorm(a.nombre)));
   }catch(e){}
   window._fact={
     academiaId, profesorId:null, academiaNombre:a.nombre,
@@ -4225,7 +4225,7 @@ async function saAbrirFacturacionAA(profesorId, nombre){
   let presus=[];
   try{
     const all=await call('/rest/v1/presupuestos?select=*&estado=eq.aceptado&order=fecha.desc')||[];
-    presus=all.filter(p=> String(p.profesor_id)===String(profesorId) || (datos.nif && p.cliente && p.cliente.nif===datos.nif));
+    presus=all.filter(p=> String(p.profesor_id)===String(profesorId) || (datos.nif && p.cliente && p.cliente.nif===datos.nif) || (p.cliente && nombre && factNorm(p.cliente.razon_social)===factNorm(nombre)));
   }catch(e){}
   window._fact={
     academiaId:null, profesorId, academiaNombre:nombre||'Aula Abierta',
@@ -4238,6 +4238,7 @@ async function saAbrirFacturacionAA(profesorId, nombre){
   saRenderFacturacion();
 }
 
+function factNorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,''); }
 function factCargarPresu(id){
   const f=window._fact; if(!f) return;
   if(!id){ return; }
