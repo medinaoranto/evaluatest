@@ -551,7 +551,7 @@ async function restaurarSesion(){
 }
 // Vuelve a abrir la pantalla en la que estaba el usuario antes de refrescar.
 function restaurarVista(s){
-  if(!s) return;
+  if(!s || window._acadModo) return;
   const v=s.view||'';
   if(v==='home'||v===''||v==='teacher') return; // loadData ya deja Inicio/Panel
   if(s.mod){ const m=getModulos().find(x=>x.id===s.mod); if(m) current.module=m; }
@@ -598,6 +598,14 @@ async function gateAccess(){
   // (antes solo se mapeaba __adgg0408; el resto de certificados, incluido
   // Aula Abierta, caían siempre en 'adgg0508' — bug corregido usando certBD()).
   if(userEmail==='admin@evaluatest.com'){ applyTema(window._activeCertId); return; }
+  // Cuenta de dirección de academia (Premium): no pasa por el gate de certificado,
+  // entra a su propia pantalla de solo lectura.
+  window._acadModo=false;
+  try{
+    const esAc=await call('/rest/v1/rpc/es_cuenta_academia',{method:'POST',body:{}});
+    if(esAc===true){ window._acadModo=true; applyTema(window._activeCertId); return; }
+    if(esAc==='off'){ token=null; refreshToken=null; throw new Error('El acceso de dirección de tu academia está desactivado. Contacta con Aptuvia.'); }
+  }catch(e){ if(/desactivado/.test(e.message||'')) throw e; }
   const certId = certBD();
   try{
     const ok = await call('/rest/v1/rpc/puedo_acceder',{method:'POST',body:{p_cert:certId}});
@@ -947,6 +955,7 @@ async function logout(){
   limpiarSesion();
   token=null; refreshToken=null; userEmail=''; userName=''; userRol=''; userId=''; userAcademia=null; userProfesorId=null; unidadesById={}; examsByUnit={}; attemptsByExam={}; falladasByUnit={}; entregasByExam={};
   window._saImpersona=false; window._saImpersonaProf=null; window._saImpersonaAcademia=null;
+  window._acadModo=false; window._acadProf=null; window._acadProfes=[]; window._acadNombre='';
   window._activeCertId=null; window._certCodigo=''; window._certNombre=''; window._aulaAbiertaDemo=false;
   document.body.classList.remove(..._TODOS_TEMAS);
   $('app').classList.add('hidden');
@@ -960,6 +969,8 @@ async function logout(){
 
 // ============ CARGA ============
 async function loadData(){
+  // Cuenta de dirección de academia: pantalla propia de solo lectura.
+  if(window._acadModo){ return openAcademiaCentro(); }
   showView('home');
   $('home').innerHTML='<div class="loader"><span class="spin"></span></div>';
   // Modo mantenimiento: si está 'on' y NO eres admin, bloqueo total.
@@ -2325,9 +2336,10 @@ async function saAbrirAcademia(id){
   saSelAcad=saAcademias.find(a=>a.academia_id===id)||{academia_id:id,nombre:'#'+id};
   $('teacher').innerHTML=saShell('<div class="loader"><span class="spin"></span></div>');
   try{
-    [saUsuarios,saExamenes]=await Promise.all([
+    [saUsuarios,saExamenes,window._saPremium]=await Promise.all([
       call('/rest/v1/rpc/sa_academia_usuarios',{method:'POST',body:{p_academia:id}}).then(r=>r||[]),
-      call('/rest/v1/rpc/sa_academia_examenes',{method:'POST',body:{p_academia:id}}).then(r=>r||[])
+      call('/rest/v1/rpc/sa_academia_examenes',{method:'POST',body:{p_academia:id}}).then(r=>r||[]),
+      call('/rest/v1/rpc/sa_acceso_estado',{method:'POST',body:{p_academia:id}}).catch(()=>null)
     ]);
   }catch(e){ saDetalle(`<div class="t-note err">${escHtml(e.message||'Error')}</div>`); return; }
   saDetalle();
@@ -2390,9 +2402,14 @@ function saDetalle(msg){
         <button class="btn btn-ghost" id="sa-nuevo-prof" style="flex:1;margin:0;min-width:130px">Crear profesor</button>
       </div>`:`<button class="btn btn-honey" id="sa-nuevo-prof" style="width:100%;margin-top:6px">Crear profesor</button>`}
     </div>
+    ${esAA?'':saPremiumCard(a)}
     ${profes.length?profes.map(tarjetaProf).join(''):'<p class="sa-empty">Sin profesores.</p>'}`;
   $('teacher').innerHTML=saShell(h);
   const g=(id)=>$(id);
+  if(g('sa-prem-tog')) g('sa-prem-tog').onclick=()=>saPremiumToggle(a.academia_id);
+  if(g('sa-prem-nueva')) g('sa-prem-nueva').onclick=()=>saPremiumCrearCuenta(a.academia_id);
+  $('teacher').querySelectorAll('[data-prempass]').forEach(b=> b.onclick=()=>saResetPassUI(b.dataset.prempass,b.dataset.email));
+  $('teacher').querySelectorAll('[data-premdel]').forEach(b=> b.onclick=()=>saBorrarUsuarioUI(b.dataset.premdel,b.dataset.email));
   if(g('sa-aa-alta-presu')) g('sa-aa-alta-presu').onclick=saAltaDesdePresu;
   if(g('sa-ren')) g('sa-ren').onclick=()=>saRenombrarUI(a.academia_id);
   if(g('sa-borr')) g('sa-borr').onclick=()=>saBorrarAcademiaUI(a.academia_id,a.nombre);
@@ -2406,6 +2423,56 @@ function saDetalle(msg){
   $('teacher').querySelectorAll('[data-sadel]').forEach(b=> b.onclick=()=>saBorrarUsuarioUI(b.dataset.sadel,b.dataset.email));
   $('teacher').querySelectorAll('[data-saedalu]').forEach(b=> b.onclick=()=>saEditarProfesorUI(b.dataset.saedalu,b.dataset.nombre));
   $('teacher').querySelectorAll('[data-sabloq]').forEach(b=> b.onclick=()=>saBloquearProfesorUI(b.dataset.sabloq,b.dataset.bloq==='1',b.dataset.email));
+}
+/* ── Acceso academia (Premium): interruptor + cuentas de dirección ── */
+function saPremiumCard(a){
+  const st=window._saPremium||{activo:false,cuentas:[]};
+  const on=!!st.activo;
+  const cuentas=st.cuentas||[];
+  let h=`<div style="border:1.5px solid ${on?'#bfe3cb':'var(--line)'};border-radius:12px;padding:11px 13px;margin:0 0 12px;background:${on?'#f4fbf6':'#fff'}">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <div><b style="font-size:.86rem;color:var(--navy)">🏫 Acceso academia</b>
+        <div style="font-size:.7rem;color:var(--ink-soft);margin-top:2px">Premium · consulta de notas en solo lectura</div></div>
+      <button id="sa-prem-tog" class="sa-mini" style="${on?'background:#e7f6ec;color:#15803d;border-color:#bfe3cb':'background:#fdecec;color:#b4232a;border-color:#f0c4c4'};font-weight:800;font-size:.7rem;padding:6px 11px;white-space:nowrap">${on?'ACTIVO':'DESACTIVADO'}</button>
+    </div>`;
+  if(on){
+    h+=`<div style="margin-top:10px">`;
+    if(!cuentas.length){ h+=`<p class="sa-empty" style="margin:0 0 8px">Sin cuenta de dirección todavía.</p>`; }
+    else cuentas.forEach(c=>{
+      h+=`<div class="sa-urow">
+        <div class="sa-uinfo"><b>${escHtml(c.nombre||'Dirección')}</b><span>${escHtml(c.email||'')}</span></div>
+        <div class="sa-uacts">
+          <button class="reg-pass" data-prempass="${escAttr(c.id)}" data-email="${escAttr(c.email||'')}">🔑</button>
+          <button class="reg-del" data-premdel="${escAttr(c.id)}" data-email="${escAttr(c.email||'')}">🗑</button>
+        </div>
+      </div>`;
+    });
+    h+=`<button class="btn btn-ghost" id="sa-prem-nueva" style="width:100%;margin-top:8px">+ Crear cuenta de dirección</button></div>`;
+  }
+  h+=`</div>`;
+  return h;
+}
+async function saPremiumToggle(academiaId){
+  const st=window._saPremium||{activo:false};
+  const nuevo=!st.activo;
+  const msg=nuevo
+    ? '¿Activar el acceso de dirección para esta academia?\nPodrá consultar (solo lectura) las notas de todos sus profesores.'
+    : '¿Desactivar el acceso de dirección?\nSus cuentas dejarán de poder entrar. No se borra nada.';
+  if(!await appConfirm(msg)) return;
+  try{
+    await call('/rest/v1/rpc/sa_acceso_toggle',{method:'POST',body:{p_academia:academiaId,p_on:nuevo}});
+    await saAbrirAcademia(academiaId);
+  }catch(e){ appAlert('No se pudo: '+(e.message||'')); }
+}
+async function saPremiumCrearCuenta(academiaId){
+  const nombre=await appPrompt('Nombre de la cuenta (ej.: Dirección):','Dirección'); if(nombre===null) return;
+  const email=await appPrompt('Email de la dirección:'); if(email===null||!email.trim()) return;
+  const pass=await appPrompt('Contraseña inicial (mín. 6):'); if(pass===null) return;
+  if(pass.length<6){ appAlert('Mínimo 6 caracteres.'); return; }
+  try{
+    await call('/rest/v1/rpc/sa_crear_cuenta_academia',{method:'POST',body:{p_email:email.trim(),p_pass:pass,p_nombre:nombre||'Dirección',p_academia:academiaId}});
+    await saAbrirAcademia(academiaId);
+  }catch(e){ appAlert('No se pudo: '+(e.message||'')); }
 }
 async function saBloquearProfesorUI(userId,estaBloqueado,email){
   const nuevo=!estaBloqueado;
@@ -5720,8 +5787,14 @@ async function abrirIntento(id){
   showView('teacher'); window.scrollTo(0,0);
   $('teacher').innerHTML=`<button class="backbtn" onclick="${back}">← Atrás</button><div class="loader"><span class="spin"></span></div>`;
   try{
-    const rows=await call('/rest/v1/intentos?id=eq.'+id+'&select=detalle,correctas,incorrectas,en_blanco,total,codigo,creado_en');
-    const it=(rows&&rows[0]); if(!it){ throw new Error('No se encontró el intento.'); }
+    let it=null;
+    if(window._acadModo){
+      it=await call('/rest/v1/rpc/ac_intento',{method:'POST',body:{p_id:id}});
+    }else{
+      const rows=await call('/rest/v1/intentos?id=eq.'+id+'&select=detalle,correctas,incorrectas,en_blanco,total,codigo,creado_en');
+      it=(rows&&rows[0])||null;
+    }
+    if(!it){ throw new Error('No se encontró el intento.'); }
     renderIntentoDetalle(meta,it);
   }catch(err){
     $('teacher').innerHTML=`<button class="backbtn" onclick="${back}">← Atrás</button>
@@ -6480,9 +6553,128 @@ async function guardarNotaUI(id){
   }catch(err){ btn.disabled=false; btn.textContent='Guardar nota'; appAlert('No se pudo guardar: '+(err.message||'')); }
 }
 
+/* ═════════ ACCESO ACADEMIA (Premium) — solo lectura ═════════
+   La dirección del centro entra con su propia cuenta (perfiles.rol='academia').
+   NO ve el escritorio del profesor: solo el listado de notas de cada profesor,
+   la ficha de cada alumno y el detalle de cada examen realizado. Sin pestañas
+   de Registrados ni Autorización, sin crear, editar ni borrar nada. */
+async function openAcademiaCentro(msg){
+  showView('teacher'); window.scrollTo(0,0);
+  window._acadProf=null; teacherView='acad'; teacherAl=null;
+  teacherRows=[]; resumenRows=null; teacherUnidadSel=null; teacherMode='best';
+  $('teacher').innerHTML='<div class="loader"><span class="spin"></span></div>';
+  let profes=[];
+  try{ profes=await call('/rest/v1/rpc/ac_profesores',{method:'POST',body:{}})||[]; }
+  catch(err){
+    $('teacher').innerHTML=`<div class="center-msg">No se pudo cargar el listado del profesorado.<br><small>${escHtml(err.message||'')}</small><br><br><button class="btn btn-ghost" onclick="openAcademiaCentro()">🔄 Reintentar</button></div>`;
+    return;
+  }
+  window._acadProfes=profes;
+  window._acadNombre=(profes[0]&&profes[0].academia_nombre)?profes[0].academia_nombre:'';
+  let h='';
+  if(msg) h+=`<div class="t-note ok">${escHtml(msg)}</div>`;
+  h+=`<div class="t-welcome"><span class="t-course">${escHtml(window._acadNombre||'Mi academia')}</span></div>
+    <p style="font-size:.78rem;color:var(--ink-soft);margin:0 2px 14px">Consulta de resultados. Elige un profesor para ver las notas de su alumnado.</p>`;
+  if(!profes.length){
+    h+=`<div class="center-msg">Tu academia todavía no tiene profesores dados de alta.</div>`;
+  }else{
+    profes.forEach(p=>{
+      h+=`<button class="al-row" data-acprof="${escAttr(p.id)}" style="width:100%;text-align:left">
+        <span class="al-info"><b>${escHtml(p.nombre||p.email||'Profesor')}</b>
+          <span>${escHtml(p.cert_codigo||'')}${p.cert_codigo?' · ':''}${escHtml(p.cert_nombre||'')}</span>
+          <span>${p.n_alumnos||0} alumno${(p.n_alumnos||0)===1?'':'s'}</span></span>
+        <span class="arrow">›</span>
+      </button>`;
+    });
+  }
+  $('teacher').innerHTML=h;
+  $('teacher').querySelectorAll('[data-acprof]').forEach(b=> b.onclick=()=>acVerProfesor(b.dataset.acprof));
+}
+async function acVerProfesor(profId){
+  const p=(window._acadProfes||[]).find(x=>String(x.id)===String(profId));
+  if(!p){ return openAcademiaCentro(); }
+  showView('teacher'); window.scrollTo(0,0);
+  $('teacher').innerHTML=`<button class="backbtn" onclick="openAcademiaCentro()">← Profesorado</button><div class="loader"><span class="spin"></span></div>`;
+  let d=null;
+  try{ d=await call('/rest/v1/rpc/ac_panel',{method:'POST',body:{p_profesor:profId}}); }
+  catch(err){
+    $('teacher').innerHTML=`<button class="backbtn" onclick="openAcademiaCentro()">← Profesorado</button>
+      <div class="center-msg">No se pudieron cargar los resultados.<br><small>${escHtml(err.message||'')}</small></div>`;
+    return;
+  }
+  d=d||{};
+  window._acadProf=p;
+  const esAula=(p.certificado_id==='aula_abierta');
+  window._activeCertId = esAula ? '__aula_abierta' : ('__'+(p.certificado_id||'adgg0508'));
+  window._certCodigo=p.cert_codigo||''; window._certNombre=p.cert_nombre||'';
+  // Reconstruir las cachés que consumen las vistas de notas del profesor.
+  unidadesById={};
+  (d.unidades||[]).forEach(u=>{ u.estado='activo'; u.ver_megatest=true; u.ver_falladas=true; unidadesById[u.id]=u; });
+  examsByUnit={};
+  (d.examenes||[]).forEach(e=>{ const id=String(e.id); if(id.startsWith('repaso-')||id.startsWith('falladas-')) return; (examsByUnit[e.unidad]=examsByUnit[e.unidad]||[]).push(e); });
+  teacherRows=(d.resultados||[]).map(r=>{
+    const raw=(r.alumno||'')+''; const pipe=raw.lastIndexOf('|');
+    const nombre=pipe>=0?raw.slice(0,pipe).trim():'';
+    const email=(pipe>=0?raw.slice(pipe+1):raw).toLowerCase().trim();
+    return {...r, alumno_email:email, alumno:email, _nombre:nombre};
+  }).filter(r=>!!r.unidad);
+  // Resumen recalculado en cliente con el mismo criterio que ve el profesor.
+  const porAlumno={};
+  teacherRows.forEach(r=>{
+    const e=r.alumno_email; if(!e) return;
+    (porAlumno[e]=porAlumno[e]||{email:e,nombre:r._nombre||null,rows:[]}).rows.push(r);
+    if(r._nombre) porAlumno[e].nombre=r._nombre;
+  });
+  resumenRows=Object.values(porAlumno).map(a=>({
+    alumno:a.email, email:a.email, nombre:a.nombre||a.email,
+    media_clase:mediaPorUnidad(a.rows,null),
+    media_final:mediaFinalPorUnidad(a.rows,null),
+    media_todos:mediaTodosIntentos(a.rows,null),
+    intentos:a.rows.filter(r=>!esIntentoFantasma(r)).length
+  }));
+  teacherUnidadSel=null; teacherMode='best'; teacherAl=null; alumnosTab='listado';
+  applyTema(window._activeCertId);
+  openAlumnos();
+}
+// CSV de notas en modo academia: se construye en cliente desde los datos ya
+// cargados (la RPC export_notas filtra por el profesor autenticado y aquí no aplica).
+function acExportNotasCSV(){
+  try{
+    const exams=[], examMap={};
+    teacherRows.forEach(r=>{
+      if(esIntentoFantasma(r)) return;
+      const k=(r.unidad||'')+'|'+(r.examen||'');
+      if(!examMap[k]){ examMap[k]={label:ufEx(r)}; exams.push(k); }
+    });
+    exams.sort((a,b)=>examMap[a].label.localeCompare(examMap[b].label,'es'));
+    const best={};
+    teacherRows.forEach(r=>{
+      if(esIntentoFantasma(r)) return;
+      const e=r.alumno_email, k=(r.unidad||'')+'|'+(r.examen||'');
+      const nota=r.total?(r.correctas/r.total*10):null;
+      const m=(best[e]=best[e]||{});
+      if(nota!=null && (m[k]==null || nota>m[k])) m[k]=nota;
+    });
+    const header=['Nombre','Correo','Media clase','Media todos','Media final', ...exams.map(k=>examMap[k].label)];
+    const filas=[header];
+    (resumenRows||[]).forEach(a=>{
+      const fila=[a.nombre||'', a.alumno, num1(a.media_clase), num1(a.media_todos), num1(a.media_final)];
+      exams.forEach(k=> fila.push(num1((best[a.alumno]||{})[k])));
+      filas.push(fila);
+    });
+    descargarCSV(`aptuvia_notas_${hoyStamp()}.csv`, filas);
+  }catch(err){ appAlert('No se pudo exportar: '+(err.message||'')); }
+}
+
 function openAlumnos(okMsg){ showView('teacher'); window.scrollTo(0,0); renderAlumnosShell(okMsg); }
 function setAlumnosTab(t){ alumnosTab=t; openAlumnos(); }
 function alumnosHeader(){
+  if(window._acadModo){
+    const p=window._acadProf||{};
+    return `<button class="backbtn" onclick="openAcademiaCentro()">← Profesorado</button>
+      <h1 style="font-size:1.25rem;font-weight:800;letter-spacing:-.4px;margin:6px 0 2px;color:var(--navy)">Alumnos</h1>
+      <p style="font-size:.78rem;color:var(--ink-soft);margin:0 0 14px">${escHtml(p.nombre||'')}${p.cert_codigo?' · '+escHtml(p.cert_codigo):''}</p>`;
+  }
   return `<button class="backbtn" onclick="pintarTeacher()">← Panel</button>
     <h1 style="font-size:1.25rem;font-weight:800;letter-spacing:-.4px;margin:6px 0 8px;color:var(--navy)">Alumnos</h1>
     <div class="t-toggle" style="margin-bottom:14px">
@@ -6492,6 +6684,7 @@ function alumnosHeader(){
     </div>`;
 }
 async function renderAlumnosShell(okMsg){
+  if(window._acadModo) alumnosTab='listado';
   if(alumnosTab==='reg'){
     $('teacher').innerHTML=alumnosHeader()+'<div class="loader"><span class="spin"></span></div>';
     let rows=[], err=null;
@@ -6591,7 +6784,7 @@ function listadoBody(okMsg){
   if(okMsg) h.push(`<div class="t-note ok">${escHtml(okMsg)}</div>`);
   h.push(`<div class="dl-row">
     <button class="btn btn-ghost" onclick="pdfNotasGeneral()">⬇ PDF de notas</button>
-    <button class="btn btn-ghost" onclick="exportNotasCSV()">⬇ CSV (Excel)</button>
+    <button class="btn btn-ghost" onclick="${window._acadModo?'acExportNotasCSV()':'exportNotasCSV()'}">⬇ CSV (Excel)</button>
   </div>`);
   if(!alum.length && !uSel){ h.push(`<div class="center-msg">Aún no hay alumnos.</div>`); return h.join(''); }
   // Chips de unidad (como en la ficha del alumno)
@@ -8492,7 +8685,7 @@ function showView(v){
   sbUpdateActive(v);
   window._curView=v; guardarSesion();
 }
-function goHome(){ if(isStaff()){ pintarTeacher(); } else { showView('home'); window.scrollTo(0,0); } }
+function goHome(){ if(window._acadModo){ openAcademiaCentro(); return; } if(isStaff()){ pintarTeacher(); } else { showView('home'); window.scrollTo(0,0); } }
 async function intentarSalirExamen(){
   const resp = Object.keys(current.respuestas||{}).length;
   const total = (current.preguntas||[]).length;
