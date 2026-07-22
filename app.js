@@ -194,14 +194,45 @@ const MODULOS_ADGG0408 = [
     locked:false },
 ];
 
+// ---- Aula Abierta: asignación alumno ↔ materia (tabla alumno_materia) ----
+let aaAsigna={};   // user_id -> Set(unidad_id)
+async function cargarAsignacionesAA(){
+  aaAsigna={};
+  try{
+    const rows=await call('/rest/v1/alumno_materia?select=user_id,unidad_id');
+    (rows||[]).forEach(r=>{ (aaAsigna[r.user_id]=aaAsigna[r.user_id]||new Set()).add(r.unidad_id); });
+  }catch(e){}
+}
+function aaProfActual(){
+  return window._saImpersona ? window._saImpersonaProf
+       : ((userRol==='profesor'||userRol==='admin') ? userId : (userProfesorId||userId));
+}
+function aaMisMaterias(){
+  const mp=aaProfActual();
+  return Object.values(unidadesById)
+    .filter(u=>String(u.id).indexOf('aula-')===0 && u.profesor_id===mp)
+    .sort(_cmpEx);
+}
+function aaEsAlumno(){
+  return !window._saImpersona && userRol!=='profesor' && userRol!=='admin';
+}
+
 // Devuelve el array de módulos del certificado activo
 function getModulos(){
   if(window._activeCertId==='__aula_abierta'){
     // Profesor: sus propias materias. Alumno: las materias de SU profesor (userProfesorId).
     const miProf = window._saImpersona ? window._saImpersonaProf
                  : ((userRol==='profesor'||userRol==='admin') ? userId : (userProfesorId||userId));
+    const _alum = aaEsAlumno();
+    const _mias = aaAsigna[userId];
     const propias = Object.values(unidadesById)
-      .filter(u=>String(u.id).indexOf('aula-')===0 && (u.profesor_id==null || u.profesor_id===miProf))
+      .filter(u=>{
+        if(String(u.id).indexOf('aula-')!==0) return false;
+        if(u.profesor_id!==miProf) return false;
+        // El alumno solo ve las materias (clases) que su profesor le ha asignado.
+        if(_alum) return !!(_mias && _mias.has(u.id));
+        return true;
+      })
       .sort(_cmpEx)
       .map(u=>{
         const pm=partesMateria(u.titulo);
@@ -211,6 +242,7 @@ function getModulos(){
           state:{label:'Activo', cls:'active'}, accent:'navy', unidades:[u.id],
         };
       });
+    if(_alum) return propias;   // sin asignación => pantalla vacía, nunca materias de otra clase
     return propias.length ? propias : MODULOS_AULA_ABIERTA;
   }
   const cid = window._activeCertId;
@@ -973,13 +1005,22 @@ async function loadData(){
     // Nombre personalizado de la pastilla en Aula Abierta (columna nombre_aula_abierta)
     window._aulaNombre='';
     if(window._activeCertId==='__aula_abierta'){
+      // 1º el nombre propio del usuario (perfiles.aula_nombre); si no tiene, el de la academia.
       try{
-        const acad=await call('/rest/v1/academia?select=nombre_aula_abierta&limit=1');
-        if(acad&&acad[0]&&acad[0].nombre_aula_abierta) window._aulaNombre=acad[0].nombre_aula_abierta;
+        const prof=window._saImpersonaProf||userId;
+        const pf=await call('/rest/v1/perfiles?select=aula_nombre&id=eq.'+encodeURIComponent(prof));
+        if(pf&&pf[0]&&pf[0].aula_nombre) window._aulaNombre=pf[0].aula_nombre;
       }catch(e){}
+      if(!window._aulaNombre){
+        try{
+          const acad=await call('/rest/v1/academia?select=nombre_aula_abierta&limit=1');
+          if(acad&&acad[0]&&acad[0].nombre_aula_abierta) window._aulaNombre=acad[0].nombre_aula_abierta;
+        }catch(e){}
+      }
     }
     unidadesById={}; unidades.forEach(u=>{ u.estado='activo'; u.ver_megatest=true; u.ver_falladas=true; unidadesById[u.id]=u; });
     const _certAct=certBD();
+    if(window._activeCertId==='__aula_abierta'){ await cargarAsignacionesAA(); }
     examsByUnit={}; examenes.forEach(e=>{ const id=String(e.id); if(id.startsWith('repaso-')||id.startsWith('falladas-')) return; if(!examVisible(e)) return; const _u=unidadesById[e.unidad]; if(_u && _u.certificado_id && _u.certificado_id!==_certAct) return; e.tipo='test'; e.publicado=true; (examsByUnit[e.unidad]=examsByUnit[e.unidad]||[]).push(e); });
     attemptsByExam={}; entregasByExam={}; falladasByUnit={};
     // Si es profesor/admin, ir directamente al Área Docente (así sus datos
@@ -1062,7 +1103,11 @@ function moduleEstado(m){
 // "Módulos" del panel docente, para que profesor y alumno vean exactamente lo mismo).
 function renderModulosCardsHtml(conBorrar){
   const mods = getModulos();
-  if(!mods.length) return '<div class="center-msg" style="padding:40px 16px">Este certificado aún no tiene módulos ni contenidos.<br><small>Aparecerán aquí cuando se den de alta sus unidades.</small></div>';
+  if(!mods.length){
+    if(window._activeCertId==='__aula_abierta' && aaEsAlumno())
+      return '<div class="center-msg" style="padding:40px 16px">Aún no tienes ninguna clase asignada.<br><small>Tu profesor debe asignarte una materia para que puedas entrar.</small></div>';
+    return '<div class="center-msg" style="padding:40px 16px">Este certificado aún no tiene módulos ni contenidos.<br><small>Aparecerán aquí cuando se den de alta sus unidades.</small></div>';
+  }
   let html='';
   mods.forEach(m=>{
     const esMateriaAA = conBorrar && String(m.id).indexOf('mod-aula-')===0 && m.unidades && m.unidades.length;
@@ -4900,21 +4945,10 @@ async function editarNombreAula(){
   const nuevo=await appPrompt('Texto de la cabecera (ej.: "Historia", "Mis asignaturas"). Déjalo vacío para volver a "Materias propias":', actual);
   if(nuevo===null) return; // canceló
   const valor=nuevo.trim().slice(0,40);
-  const H={'apikey':SUPABASE_KEY,'Authorization':'Bearer '+token,'Content-Type':'application/json'};
   try{
-    // 1) Averiguar el id de la fila de academia (PostgREST NO permite un
-    //    UPDATE sin filtro: sin ?columna=eq... devuelve 400 por seguridad).
-    const rget=await fetch(SUPABASE_URL+'/rest/v1/academia?select=id&limit=1',{headers:H});
-    const filas=await rget.json();
-    const idFila=(Array.isArray(filas)&&filas[0])?filas[0].id:null;
-    if(idFila==null) throw new Error('no se encontró la fila de academia');
-    // 2) Actualizar solo esa fila, filtrando por id
-    const r=await fetch(SUPABASE_URL+'/rest/v1/academia?id=eq.'+encodeURIComponent(idFila),{
-      method:'PATCH',
-      headers:{...H,'Prefer':'return=minimal'},
-      body:JSON.stringify({nombre_aula_abierta: valor||null})
-    });
-    if(!r.ok){ let d=''; try{ d=await r.text(); }catch(e){} throw new Error('Error '+r.status+(d?' · '+d.slice(0,120):'')); }
+    // Se guarda en el propio perfil (RPC). La tabla academia es de solo lectura
+    // para el usuario: escribir ahí directamente devuelve 403 (RLS endurecida).
+    await call('/rest/v1/rpc/set_aula_nombre',{method:'POST',body:{p_nombre: valor||null}});
     window._aulaNombre=valor;
     pintarTeacher();
   }catch(err){
@@ -5964,11 +5998,13 @@ async function renderAlumnosShell(okMsg){
     let rows=[], err=null;
     try{ rows=await call('/rest/v1/rpc/listar_registrados',{method:'POST',body:impProf({})})||[]; }
     catch(e){ err=e.message; }
+    if(window._activeCertId==='__aula_abierta') await cargarAsignacionesAA();
     $('teacher').innerHTML=alumnosHeader()+regBody(rows,err,okMsg);
     $('teacher').querySelectorAll('[data-revoke]').forEach(b=> b.onclick=()=>eliminarInvitacionUI(b.dataset.revoke));
     $('teacher').querySelectorAll('[data-reauth]').forEach(b=> b.onclick=()=>reautorizarAlumnoUI(b.dataset.reauth,b.dataset.nombre));
     $('teacher').querySelectorAll('[data-borrar]').forEach(b=> b.onclick=()=>borrarCuentaUI(b.dataset.borrar, b.dataset.email));
     $('teacher').querySelectorAll('[data-pass]').forEach(b=> b.onclick=()=>resetPassAlumnoUI(b.dataset.pass, b.dataset.email));
+    $('teacher').querySelectorAll('[data-amu]').forEach(b=> b.onclick=()=>toggleMateriaAlumno(b.dataset.amu, b.dataset.amuni, b.dataset.amon==='1'));
     return;
   }
   if(alumnosTab==='auth'){
@@ -6100,6 +6136,33 @@ async function invitarAlumnoUI(){
     await openAlumnos('Alumno autorizado: '+email);
   }catch(err){ btn.disabled=false; btn.textContent='Autorizar alumno'; appAlert('No se pudo: '+(err.message||'')); }
 }
+// Chips de clases asignadas a un alumno (solo Aula Abierta)
+function aaChips(r){
+  if(window._activeCertId!=='__aula_abierta') return '';
+  const mats=aaMisMaterias();
+  if(!mats.length) return '';
+  const mias=aaAsigna[r.id]||new Set();
+  const chips=mats.map(u=>{
+    const on=mias.has(u.id);
+    const pm=partesMateria(u.titulo);
+    const nom=(pm.nombre||u.codigo||u.id);
+    const est = on
+      ? 'background:#e8f0ff;border:1.5px solid #7d9bd8;color:#1c2a55;font-weight:700'
+      : 'background:#fff;border:1.5px solid #cfd8e8;color:#33406b';
+    return `<button data-amu="${escAttr(r.id)}" data-amuni="${escAttr(u.id)}" data-amon="${on?'1':'0'}" title="${on?'Quitar de esta clase':'Asignar a esta clase'}" style="font-size:.75rem;padding:4px 9px;border-radius:999px;cursor:pointer;line-height:1.2;${est}">${on?'✓ ':''}${escHtml(nom)}</button>`;
+  }).join('');
+  const aviso = mias.size ? '' : '<span style="font-size:.72rem;color:#b4232a;font-weight:700">⚠️ sin clase: no ve nada</span>';
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 4px"><span style="font-size:.74rem;color:var(--ink-soft);font-weight:700;margin-right:2px">Clases:</span>${chips}${aviso}</div>`;
+}
+async function toggleMateriaAlumno(userIdAl, unidadId, estaba){
+  const fn = estaba ? 'aa_quitar_materia' : 'aa_asignar_materia';
+  try{
+    await call('/rest/v1/rpc/'+fn,{method:'POST',body:impProf({p_user_id:userIdAl,p_unidad_id:unidadId})});
+    const set = aaAsigna[userIdAl] = aaAsigna[userIdAl] || new Set();
+    if(estaba) set.delete(unidadId); else set.add(unidadId);
+    await renderAlumnosShell();
+  }catch(err){ appAlert('No se pudo cambiar la clase: '+(err.message||'')); }
+}
 function regBody(rows,errMsg,okMsg){
   let h='';
   if(okMsg) h+=`<div class="t-note ok">${escHtml(okMsg)}</div>`;
@@ -6119,6 +6182,7 @@ function regBody(rows,errMsg,okMsg){
         <span class="reg-mail">${escHtml(r.email)}</span>
         <span class="reg-badges">${badge}${act}</span>
       </div>
+      ${aaChips(r)}
       <div class="reg-actions">
         <button class="reg-pass" data-pass="${r.id}" data-email="${escHtml(r.email)}">🔑 Nueva contraseña</button>
         ${r.autorizado
