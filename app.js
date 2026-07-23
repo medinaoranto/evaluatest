@@ -6881,9 +6881,7 @@ async function acVerProfesor(profId){
   showView('teacher'); window.scrollTo(0,0);
   $('teacher').innerHTML=`<button class="backbtn" onclick="openAcademiaCentro()">← Profesorado</button><div class="loader"><span class="spin"></span></div>`;
   let d=null;
-  const body={p_profesor:profId};
-  if(window._acadVista) body.p_academia=window._acadVista;
-  try{ d=await call('/rest/v1/rpc/ac_panel',{method:'POST',body:body}); }
+  try{ d=await call('/rest/v1/rpc/ac_panel',{method:'POST',body:{p_profesor:profId}}); }
   catch(err){
     $('teacher').innerHTML=`<button class="backbtn" onclick="openAcademiaCentro()">← Profesorado</button>
       <div class="center-msg">No se pudieron cargar los resultados.<br><small>${escHtml(err.message||'')}</small></div>`;
