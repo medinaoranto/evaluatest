@@ -726,6 +726,38 @@ function appConfirm(m){ return _modal({msg:m,cancel:true}); }
 function driveAbrir(){ try{ window.open('https://drive.google.com/drive/my-drive','_blank','noopener'); }catch(e){} }
 function appPrompt(m,def){ return _modal({msg:m,cancel:true,prompt:true,def:def}); }
 
+// Selector tappable genérico. opciones=[{label,sub,value}]. Devuelve value o null si se cancela.
+function appPicker(titulo, opciones){
+  return new Promise(res=>{
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;';
+    const box=document.createElement('div');
+    box.style.cssText='background:#fff;border-radius:16px;max-width:460px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.25);overflow:hidden;';
+    const head=document.createElement('div');
+    head.style.cssText='padding:16px 18px 10px;font-size:.95rem;font-weight:700;color:var(--navy,#1e293b);border-bottom:1px solid var(--line,#eef0f4);';
+    head.textContent=titulo||'Elige una opción';
+    const list=document.createElement('div');
+    list.style.cssText='overflow-y:auto;padding:4px 0;flex:1;';
+    const done=v=>{ ov.remove(); res(v); };
+    (opciones||[]).forEach(o=>{
+      const b=document.createElement('button'); b.type='button';
+      b.style.cssText='display:block;width:100%;text-align:left;padding:14px 18px;border:none;background:#fff;cursor:pointer;font-family:inherit;border-bottom:1px solid var(--line,#f1f3f7);';
+      b.innerHTML='<span style="font-size:.9rem;color:var(--navy,#1e293b);font-weight:600">'+escHtml(o.label)+'</span>'+(o.sub?'<br><span style="font-size:.75rem;color:var(--ink-soft,#64748b)">'+escHtml(o.sub)+'</span>':'');
+      b.onclick=()=>done(o.value);
+      list.appendChild(b);
+    });
+    const foot=document.createElement('div');
+    foot.style.cssText='padding:10px 14px;border-top:1px solid var(--line,#eef0f4);text-align:right;';
+    const c=document.createElement('button'); c.type='button'; c.textContent='Cancelar';
+    c.style.cssText='background:#fff;border:1px solid var(--line,#e2e8f0);border-radius:10px;padding:9px 16px;font-family:inherit;font-size:.85rem;cursor:pointer;';
+    c.onclick=()=>done(null);
+    foot.appendChild(c);
+    box.appendChild(head); box.appendChild(list); box.appendChild(foot);
+    ov.appendChild(box); document.body.appendChild(ov);
+    ov.onclick=e=>{ if(e.target===ov) done(null); };
+  });
+}
+
 // Selector de certificado tappable (estilo lista de módulos), fuente: catálogo CERT_CATEGORIAS.
 // Devuelve {id,codigo,nombre} con id SIN prefijo '__', o null si se cancela.
 
@@ -816,12 +848,11 @@ function temarioNombreTema(temaId){
 async function temarioMover(unidad, id){
   const temas=temarioTemas||[];
   if(!temas.length){ appAlert('Esta materia todavía no tiene temas.\n\nCréalos desde la pantalla de la materia y vuelve aquí.'); return; }
-  const menu=temas.map((t,i)=>(i+1)+' = '+t.titulo).join('\n');
-  const r=await appPrompt('¿A qué tema lo llevamos?\nEscribe el número (0 = dejarlo sin tema):\n\n'+menu);
+  const ops=temas.map(t=>({label:t.titulo, value:String(t.id)}));
+  ops.push({label:'Sin tema', sub:'Dejarlo fuera de los temas', value:'__none'});
+  const r=await appPicker('¿A qué tema lo llevamos?', ops);
   if(r===null) return;
-  const i=parseInt(r,10);
-  if(isNaN(i)||i<0||i>temas.length){ appAlert('Número no válido.'); return; }
-  const destino=i===0?null:temas[i-1].id;
+  const destino = r==='__none' ? null : r;
   try{
     await call('/rest/v1/rpc/temario_tema',{method:'POST',body:impProf({p_material:id,p_tema:destino})});
     renderTemarioProfesor(unidad);
@@ -840,7 +871,7 @@ async function renderTemarioProfesor(unidad){
     mods.forEach(m=>{ (m.unidades||[]).forEach(uid=>{
       const u=unidadesById[uid];
       const cod=(u&&u.codigo)||uid;
-      const nom=(u&&u.titulo)?partesMateria(u.titulo).nombre:'';
+      const nom=tituloMateria(u);
       opts+=`<option value="${escAttr(uid)}"${uid===unidad?' selected':''}>${escHtml(nom?cod+' · '+nom:cod)}</option>`;
     }); });
     // Selector de tema (solo Aula Abierta)
@@ -5953,6 +5984,13 @@ function partesMateria(tituloGuardado){
   if(i<0) return {etiqueta:'MATERIA', nombre:s};
   return {etiqueta:s.slice(0,i).trim()||'MATERIA', nombre:s.slice(i+1).trim()};
 }
+// "Historia · 4º ESO" (Aula Abierta) o solo el nombre (certificados)
+function tituloMateria(u){
+  if(!u) return '';
+  const p=partesMateria(u.titulo||'');
+  if(!p.nombre) return p.etiqueta==='MATERIA'?'':p.etiqueta;
+  return (p.etiqueta && p.etiqueta!=='MATERIA') ? (p.nombre+' · '+p.etiqueta) : p.nombre;
+}
 
 // ---- Cambiar contraseña ----
 function openPassword(okMsg, errMsg){
@@ -6000,7 +6038,7 @@ async function openPublicar(okMsg){
       if(!exs.length && !mats.length) return;
       const u=unidadesById[uid];
       any=true;
-      h.push(`<div class="pub-unit">${u?escHtml(u.codigo):uid} · ${u?escHtml(partesMateria(u.titulo).nombre):''}</div>`);
+      h.push(`<div class="pub-unit">${u?escHtml(u.codigo):uid} · ${u?escHtml(tituloMateria(u)):''}</div>`);
       if(exs.length){
         h.push(`<div class="pub-bulk"><button class="pub-allbtn" data-all="${uid}" data-val="1">Activar todas</button><button class="pub-allbtn ghost" data-all="${uid}" data-val="0">Quitar todas</button></div>`);
         exs.forEach(e=>{
@@ -6287,7 +6325,7 @@ async function openExamMgmt(){
 function renderExamMgmt(okMsg,errMsg){
   const units=unidadesParaCrearExamen();
   if(!builder.unidad && units.length) builder.unidad=units[0];
-  const uOpts=units.map(u=>`<option value="${u}"${u===builder.unidad?' selected':''}>${unidadesById[u]?unidadesById[u].codigo+' · '+unidadesById[u].titulo:u}</option>`).join('');
+  const uOpts=units.map(u=>`<option value="${u}"${u===builder.unidad?' selected':''}>${unidadesById[u]?unidadesById[u].codigo+' · '+tituloMateria(unidadesById[u]):u}</option>`).join('');
   const temas=builder.temasCache[builder.unidad]||[];
   const examTitleMap={};
   Object.values(examsByUnit).forEach(arr=>arr.forEach(e=>{ examTitleMap[e.id]=e.titulo||e.id; }));
@@ -7214,8 +7252,7 @@ function aaChips(r){
   const mias=aaAsigna[r.id]||new Set();
   const chips=mats.map(u=>{
     const on=mias.has(u.id);
-    const pm=partesMateria(u.titulo);
-    const nom=(pm.nombre||u.codigo||u.id);
+    const nom=(tituloMateria(u)||u.codigo||u.id);
     const est = on
       ? 'background:#e8f0ff;border:1.5px solid #7d9bd8;color:#1c2a55;font-weight:700'
       : 'background:#fff;border:1.5px solid #cfd8e8;color:#33406b';
@@ -7311,7 +7348,7 @@ function openEstados(okMsg){
     m.unidades.forEach(uid=>{
       const u=unidadesById[uid];
       const codigo = u ? u.codigo : uid.toUpperCase();
-      const titulo = (u&&u.titulo) ? partesMateria(u.titulo).nombre : (UF_TITULOS[uid]||'');
+      const titulo = (u&&u.titulo) ? tituloMateria(u) : (UF_TITULOS[uid]||'');
       const est=unitEstado(uid);
       h.push(`<div class="est-row"><div class="est-name">${escHtml(codigo)}${titulo?' · '+escHtml(titulo):''}</div><div class="est-seg">${['activo','terminado','proximamente'].map(s=>`<button class="est-b ${s}${est===s?' on':''}" data-uid="${uid}" data-est="${s}">${estLabel(s)}</button>`).join('')}</div></div>`);
     });
@@ -7719,7 +7756,7 @@ async function openAATemas(unitId){
   const staff=isStaff();
   const head=`<button class="backbtn" onclick="${staff?'openModulosTeacher()':'goHome()'}">← Materias</button>
     <div class="unit-head"><div class="c">${u?escHtml(u.codigo):escHtml(unitId.toUpperCase())}</div>
-    <div class="n">${u?escHtml(partesMateria(u.titulo).nombre):''}</div></div>`;
+    <div class="n">${u?escHtml(tituloMateria(u)):''}</div></div>`;
   $('unit').innerHTML=head+'<div class="loader"><span class="spin"></span></div>';
 
   let temas=[];
@@ -7816,12 +7853,11 @@ async function aaTemaBorrar(unitId, temaId){
 // Mover un examen a otro tema desde la pantalla del tema.
 async function aaMoverExamen(unitId, examId){
   const temas=window._aaTemas||[];
-  const menu=temas.map((t,i)=>(i+1)+' = '+t.titulo).join('\n');
-  const r=await appPrompt('¿A qué tema lo llevamos?\nEscribe el número (0 = dejarlo sin tema):\n\n'+menu);
+  const ops=temas.map(t=>({label:t.titulo, value:String(t.id)}));
+  ops.push({label:'Sin tema', sub:'Dejarlo fuera de los temas', value:'__none'});
+  const r=await appPicker('¿A qué tema lo llevamos?', ops);
   if(r===null) return;
-  const i=parseInt(r,10);
-  if(isNaN(i)||i<0||i>temas.length){ appAlert('Número no válido.'); return; }
-  const destino=i===0?null:temas[i-1].id;
+  const destino = r==='__none' ? null : r;
   try{
     await call('/rest/v1/rpc/aa_examen_tema',{method:'POST',body:impProf({p_examen:examId,p_tema:destino})});
     const ex=(examsByUnit[unitId]||[]).find(e=>e.id===examId);
@@ -7847,7 +7883,7 @@ function openUnit(unitId){
   const backLabel = esAulaAbierta() ? '← Temas' : ((current.module && current.module.unidades.length>1) ? '← '+current.module.code : '← Módulos');
   const backFn = esAulaAbierta() ? `aaVolverTemas('${escAttr(unitId)}')` : ((current.module && current.module.unidades.length>1) ? `openModule('${current.module.id}')` : (staff ? 'openModulosTeacher()' : 'goHome()'));
   const head = `<button class="backbtn" onclick="${backFn}">${backLabel}</button>
-    <div class="unit-head"><div class="c">${u?u.codigo:unitId.toUpperCase()}</div><div class="n">${(u&&u.titulo)?escHtml(partesMateria(u.titulo).nombre):(UF_TITULOS[unitId]||'')}${(staff && window._activeCertId==='__aula_abierta' && u)?` <button onclick="renombrarMateria('${escAttr(unitId)}')" title="Cambiar el nombre de la materia" style="background:none;border:none;cursor:pointer;font-size:.9rem;padding:0 4px;opacity:.65">✏️</button>`:''}</div></div>`;
+    <div class="unit-head"><div class="c">${u?u.codigo:unitId.toUpperCase()}</div><div class="n">${(u&&u.titulo)?escHtml(tituloMateria(u)):(UF_TITULOS[unitId]||'')}${(staff && window._activeCertId==='__aula_abierta' && u)?` <button onclick="renombrarMateria('${escAttr(unitId)}')" title="Cambiar el nombre de la materia" style="background:none;border:none;cursor:pointer;font-size:.9rem;padding:0 4px;opacity:.65">✏️</button>`:''}</div></div>`;
   const posterProx = `<div class="soon-screen"><div class="soon-emoji">📭</div><div class="soon-title">Aún no hay exámenes</div><div class="soon-text">Tu profesor activará los exámenes a medida que avance el temario.<br>Vuelve pronto.</div></div>`;
   if(est==='proximamente' && !staff){ $('unit').innerHTML=head+posterProx; return; }
   if(!list.length){ $('unit').innerHTML=head+posterProx; return; }
@@ -7880,7 +7916,7 @@ function openUnit(unitId){
             <span class="cell-avg" style="font-size:1rem">✍️</span>
             <span class="meta"><span class="et">${escHtml(e.titulo)} <span class="rbadge">Redacción</span>${oc}</span>
             <span class="es avg-sub">Examen de redacción</span></span>
-            ${esAulaAbierta()?`<button class="ce-del" data-mover="${e.id}" aria-label="Mover de tema" style="background:#eef2ff;border-color:#c7d2fe">📂</button>`:'<span class="arrow">›</span>'}</button>`;
+            ${esAulaAbierta()?`<span class="ce-del" role="button" data-mover="${e.id}" aria-label="Mover de tema" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:4px 8px;flex:0 0 auto;font-size:.95rem;line-height:1;display:inline-flex;align-items:center">📂</span>`:'<span class="arrow">›</span>'}</button>`;
         return;
       }
       const st=statsExamen(e.id);
@@ -7895,7 +7931,7 @@ function openUnit(unitId){
           <span class="cell-avg">${avgLabel}</span>
           <span class="meta"><span class="et">${escHtml(e.titulo)}${e.cuenta_final?' <span class="ef-badge">Nota final</span>':''}${oc}</span>
           <span class="es avg-sub">${subTxt}</span></span>
-          ${esAulaAbierta()?`<button class="ce-del" data-mover="${e.id}" aria-label="Mover de tema" style="background:#eef2ff;border-color:#c7d2fe">📂</button>`:'<span class="arrow">›</span>'}</button>`;
+          ${esAulaAbierta()?`<span class="ce-del" role="button" data-mover="${e.id}" aria-label="Mover de tema" style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:4px 8px;flex:0 0 auto;font-size:.95rem;line-height:1;display:inline-flex;align-items:center">📂</span>`:'<span class="arrow">›</span>'}</button>`;
     });
     html+=`</div>`;
     if(esAulaAbierta()){
