@@ -2473,6 +2473,7 @@ function saDetalle(msg){
   if(g('sa-prem-link')) g('sa-prem-link').onclick=()=>saPremiumEnlazar(a.academia_id);
   if(g('sa-prem-fact')) g('sa-prem-fact').onchange=(ev)=>saPremiumFacturada(a.academia_id, ev.target.checked);
   if(g('sa-prem-nueva')) g('sa-prem-nueva').onclick=()=>saPremiumCrearCuenta(a.academia_id,null,false);
+  if(g('sa-prem-ver')) g('sa-prem-ver').onclick=()=>acVerComoAcademia(a.academia_id);
   $('teacher').querySelectorAll('[data-prempass]').forEach(b=> b.onclick=()=>saResetPassUI(b.dataset.prempass,b.dataset.email));
   $('teacher').querySelectorAll('[data-premdel]').forEach(b=> b.onclick=()=>saBorrarUsuarioUI(b.dataset.premdel,b.dataset.email));
   if(g('sa-aa-alta-presu')) g('sa-aa-alta-presu').onclick=saAltaDesdePresu;
@@ -2527,7 +2528,8 @@ function saPremiumCard(a){
         </div>
       </div>`;
     });
-    h+=`<button class="btn btn-ghost" id="sa-prem-nueva" style="width:100%;margin-top:8px">+ Crear cuenta de dirección</button></div>`;
+    h+=`<button class="btn btn-ghost" id="sa-prem-nueva" style="width:100%;margin-top:8px">+ Crear cuenta de dirección</button>
+      <button class="btn btn-ghost" id="sa-prem-ver" style="width:100%;margin-top:7px">👁 Ver lo que ve la academia</button></div>`;
   }
   h+=`</div>`;
   return h;
@@ -6826,20 +6828,24 @@ async function guardarNotaUI(id){
    NO ve el escritorio del profesor: solo el listado de notas de cada profesor,
    la ficha de cada alumno y el detalle de cada examen realizado. Sin pestañas
    de Registrados ni Autorización, sin crear, editar ni borrar nada. */
-async function openAcademiaCentro(msg){
+async function openAcademiaCentro(msg, academiaId){
   showView('teacher'); window.scrollTo(0,0);
+  if(academiaId!==undefined) window._acadVista=academiaId||null;
+  const prev=window._acadVista||null;
   window._acadProf=null; teacherView='acad'; teacherAl=null;
   teacherRows=[]; resumenRows=null; teacherUnidadSel=null; teacherMode='best';
   $('teacher').innerHTML='<div class="loader"><span class="spin"></span></div>';
   let profes=[];
-  try{ profes=await call('/rest/v1/rpc/ac_profesores',{method:'POST',body:{}})||[]; }
+  try{ profes=await call('/rest/v1/rpc/ac_profesores',{method:'POST',body:prev?{p_academia:prev}:{}})||[]; }
   catch(err){
-    $('teacher').innerHTML=`<div class="center-msg">No se pudo cargar el listado del profesorado.<br><small>${escHtml(err.message||'')}</small><br><br><button class="btn btn-ghost" onclick="openAcademiaCentro()">🔄 Reintentar</button></div>`;
+    $('teacher').innerHTML=`${prev?`<button class="backbtn" onclick="acSalirVista()" style="margin-bottom:10px">← Volver a Soporte</button>`:''}<div class="center-msg">No se pudo cargar el listado del profesorado.<br><small>${escHtml(err.message||'')}</small><br><br><button class="btn btn-ghost" onclick="openAcademiaCentro()">🔄 Reintentar</button></div>`;
     return;
   }
   window._acadProfes=profes;
   window._acadNombre=(profes[0]&&profes[0].academia_nombre)?profes[0].academia_nombre:'';
   let h='';
+  if(prev) h+=`<button class="backbtn" onclick="acSalirVista()" style="margin-bottom:10px;background:var(--honey-tint);border-color:var(--honey)">← Volver a Soporte</button>
+    <div class="t-note" style="background:var(--honey-tint);border:1px solid var(--honey);border-radius:10px;padding:8px 11px;font-size:.73rem;margin-bottom:10px">👁 Estás viendo la pantalla tal y como la ve la dirección de esta academia. Todo es de solo lectura.</div>`;
   if(msg) h+=`<div class="t-note ok">${escHtml(msg)}</div>`;
   h+=`<div class="t-welcome"><span class="t-course">${escHtml(window._acadNombre||'Mi academia')}</span></div>
     <p style="font-size:.78rem;color:var(--ink-soft);margin:0 2px 14px">Consulta de resultados. Elige un profesor para ver las notas de su alumnado.</p>`;
@@ -6858,13 +6864,26 @@ async function openAcademiaCentro(msg){
   $('teacher').innerHTML=h;
   $('teacher').querySelectorAll('[data-acprof]').forEach(b=> b.onclick=()=>acVerProfesor(b.dataset.acprof));
 }
+// Vista previa desde Soporte: el superadmin ve exactamente la pantalla de la dirección.
+function acVerComoAcademia(academiaId){
+  window._acadModo=true;
+  openAcademiaCentro(null, academiaId);
+}
+async function acSalirVista(){
+  const id=window._acadVista;
+  window._acadModo=false; window._acadVista=null; window._acadProf=null; window._acadProfes=[];
+  teacherRows=[]; resumenRows=null; teacherAl=null; teacherView='panel';
+  await saAbrirAcademia(id);
+}
 async function acVerProfesor(profId){
   const p=(window._acadProfes||[]).find(x=>String(x.id)===String(profId));
   if(!p){ return openAcademiaCentro(); }
   showView('teacher'); window.scrollTo(0,0);
   $('teacher').innerHTML=`<button class="backbtn" onclick="openAcademiaCentro()">← Profesorado</button><div class="loader"><span class="spin"></span></div>`;
   let d=null;
-  try{ d=await call('/rest/v1/rpc/ac_panel',{method:'POST',body:{p_profesor:profId}}); }
+  const body={p_profesor:profId};
+  if(window._acadVista) body.p_academia=window._acadVista;
+  try{ d=await call('/rest/v1/rpc/ac_panel',{method:'POST',body:body}); }
   catch(err){
     $('teacher').innerHTML=`<button class="backbtn" onclick="openAcademiaCentro()">← Profesorado</button>
       <div class="center-msg">No se pudieron cargar los resultados.<br><small>${escHtml(err.message||'')}</small></div>`;
