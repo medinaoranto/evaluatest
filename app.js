@@ -1002,7 +1002,7 @@ async function loadData(){
     // ── FASE 1: datos mínimos para mostrar la UI ──
     const [unidades, examenes, perfil] = await Promise.all([
       fetchR('/rest/v1/unidades?select=id,codigo,titulo,modulo,orden,certificado_id,profesor_id&order=orden.asc').catch(()=>fetchR('/rest/v1/unidades?select=id,codigo,titulo,modulo,orden,certificado_id&order=orden.asc')).catch(()=>fetchR('/rest/v1/unidades?select=id,codigo,titulo,modulo,orden&order=orden.asc')),
-      fetchR('/rest/v1/examenes?select=id,unidad,numero,titulo,tema,nivel,orden,cuenta_final,academia_id,profesor_id,material_url,material_modo&order=orden.asc').catch(()=>fetchR('/rest/v1/examenes?select=id,unidad,numero,titulo,tema,nivel,orden,cuenta_final,academia_id,material_url,material_modo&order=orden.asc')).catch(()=>fetchR('/rest/v1/examenes?select=id,unidad,numero,titulo,tema,nivel,orden,cuenta_final,academia_id&order=orden.asc')),
+      fetchR('/rest/v1/examenes?select=id,unidad,numero,titulo,tema,nivel,orden,cuenta_final,academia_id,profesor_id,material_url,material_modo,tema_id&order=orden.asc').catch(()=>fetchR('/rest/v1/examenes?select=id,unidad,numero,titulo,tema,nivel,orden,cuenta_final,academia_id,material_url,material_modo&order=orden.asc')).catch(()=>fetchR('/rest/v1/examenes?select=id,unidad,numero,titulo,tema,nivel,orden,cuenta_final,academia_id&order=orden.asc')),
       fetchR('/rest/v1/perfiles?select=id,nombre,rol,academia_id,profesor_id').catch(()=>fetchR('/rest/v1/perfiles?select=id,nombre,rol,academia_id')),
     ]);
 
@@ -1605,7 +1605,7 @@ function docPDFBase(titulo, subtitulo, secciones, pieTexto){
 function docTrazabilidad(){
   try{
     const doc=docPDFBase('Trazabilidad del circuito','Del presupuesto a la baja del cliente · quién hace qué en cada paso',TRAZA_SECCIONES);
-    docVer(doc,'Aptuvia-trazabilidad.pdf','Trazabilidad del circuito');
+    docVer(doc,'Aptuvia-trazabilidad.pdf');
   }catch(e){ appAlert('No se pudo generar el PDF: '+(e.message||'')); }
 }
 
@@ -1727,7 +1727,7 @@ function docManualProfe(){
       manualProfeSecciones(esAula),
       'Aptuvia · aptuvia.es · Manual del profesorado'
     );
-    docVer(doc, esAula?'Aptuvia-manual-profesorado-aula-abierta.pdf':'Aptuvia-manual-profesorado.pdf','Manual del profesorado');
+    docVer(doc,esAula?'Aptuvia-manual-profesorado-aula-abierta.pdf':'Aptuvia-manual-profesorado.pdf');
   }catch(e){ appAlert('No se pudo generar el PDF: '+(e.message||'')); }
 }
 
@@ -1788,7 +1788,7 @@ function docManualAlumno(){
       manualAlumnoSecciones(esAula),
       'Aptuvia · aptuvia.es · Manual del alumnado'
     );
-    docVer(doc,'Aptuvia-manual-alumnado.pdf','Manual del alumnado');
+    docVer(doc,'Aptuvia-manual-alumnado.pdf');
   }catch(e){ appAlert('No se pudo generar el PDF: '+(e.message||'')); }
 }
 
@@ -1945,7 +1945,7 @@ function docManualArea(area){
   try{
     const m=MANUAL_AREAS[area]; if(!m) return;
     const doc=docPDFBase(m.titulo, m.sub, m.secs);
-    docVer(doc,'Aptuvia-manual-'+area+'.pdf','Manual · '+(m.titulo||area));
+    docVer(doc,'Aptuvia-manual-'+area+'.pdf');
   }catch(e){ appAlert('No se pudo generar el PDF: '+(e.message||'')); }
 }
 
@@ -5955,9 +5955,8 @@ function openPublicar(okMsg){
       h.push(`<div class="pub-bulk"><button class="pub-allbtn" data-all="${uid}" data-val="1">Activar todas</button><button class="pub-allbtn ghost" data-all="${uid}" data-val="0">Quitar todas</button></div>`);
       exs.forEach(e=>{
         const on=!!e.publicado;
-        const badge=e.tipo==='redaccion'?'<span class="rbadge">Redacción</span> ':'';
         h.push(`<div class="pub-row">
-            <span class="pub-info"><b>${badge}${escHtml(e.titulo)}</b><span>${escHtml(e.tema||'')}</span></span>
+            <span class="pub-info"><b>${escHtml(e.titulo)}</b><span>${escHtml(e.tema||'')}</span></span>
             <button class="switch${on?' on':''}" data-pub="${e.id}" data-on="${on?1:0}" aria-label="${on?'Visible':'Oculto'}"><span class="knob"></span></button>
           </div>`);
       });
@@ -6141,7 +6140,7 @@ function examVisible(e){
 }
 async function refrescarExamenes(){
   const [ex, tipos, pubAcad] = await Promise.all([
-    call('/rest/v1/examenes?select=id,unidad,numero,titulo,tema,nivel,orden,cuenta_final,academia_id,profesor_id,material_url,material_modo&order=orden.asc'),
+    call('/rest/v1/examenes?select=id,unidad,numero,titulo,tema,nivel,orden,cuenta_final,academia_id,profesor_id,material_url,material_modo,tema_id&order=orden.asc'),
     call('/rest/v1/examenes?select=id,tipo').catch(()=>null),
     call('/rest/v1/rpc/examenes_publicados_academia',{method:'POST',body:impProf({})}).catch(()=>[])
   ]);
@@ -7635,16 +7634,148 @@ async function abrirIntentoAlumno(id,unitId,titulo){
   }
 }
 
+/* ═════════ AULA ABIERTA · TEMAS ═════════
+   Capa intermedia entre la materia y su contenido. SOLO en Aula Abierta:
+   en Aptuvia (EV) la navegación no cambia. Cada tema agrupa los exámenes de
+   esa materia; lo que aún no está asignado cae en "Sin tema". */
+function esAulaAbierta(){ return window._activeCertId==='__aula_abierta'; }
+function aaVolverTemas(unitId){ window._aaTema=null; openAATemas(unitId); }
+
+async function openAATemas(unitId){
+  window._aaTema=null;
+  current.unit=unitId;
+  showView('unit'); window.scrollTo(0,0);
+  const u=unidadesById[unitId];
+  const staff=isStaff();
+  const head=`<button class="backbtn" onclick="${staff?'openModulosTeacher()':'goHome()'}">← Materias</button>
+    <div class="unit-head"><div class="c">${u?escHtml(u.codigo):escHtml(unitId.toUpperCase())}</div>
+    <div class="n">${u?escHtml(partesMateria(u.titulo).nombre):''}</div></div>`;
+  $('unit').innerHTML=head+'<div class="loader"><span class="spin"></span></div>';
+
+  let temas=[];
+  try{ temas=await call('/rest/v1/rpc/aa_temas_listar',{method:'POST',body:impProf({p_unidad:unitId})})||[]; }
+  catch(err){
+    $('unit').innerHTML=head+`<div class="center-msg">No se pudieron cargar los temas.<br><small>${escHtml(err.message||'')}</small></div>`;
+    return;
+  }
+  window._aaTemas=temas;
+
+  const todos=(examsByUnit[unitId]||[]).filter(e=> staff || e.publicado);
+  const cuenta=id=> todos.filter(e=> id==='__sin' ? !e.tema_id : String(e.tema_id)===String(id)).length;
+  const sinTema=cuenta('__sin');
+
+  let h=head;
+  if(staff){
+    h+=`<button class="btn btn-honey" onclick="aaTemaCrear('${escAttr(unitId)}')" style="margin-bottom:14px">+ Nuevo tema</button>`;
+  }
+  if(!temas.length && !sinTema){
+    h+=`<div class="soon-screen"><div class="soon-emoji">📚</div><div class="soon-title">Todavía no hay temas</div>
+      <div class="soon-text">${staff?'Crea el primer tema y ve colocando dentro sus exámenes.':'Tu profesor aún no ha publicado contenido.'}</div></div>`;
+    $('unit').innerHTML=h; return;
+  }
+  h+=`<div class="section">`;
+  temas.forEach(t=>{
+    const n=cuenta(t.id);
+    const aps=Array.isArray(t.apartados)?t.apartados:[];
+    h+=`<div class="aa-tema" style="border:1.5px solid var(--line);border-radius:11px;margin-bottom:7px;background:#fff;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:6px;padding:9px 11px">
+        <button data-tema="${escAttr(t.id)}" style="flex:1;text-align:left;background:none;border:0;padding:0;font-family:inherit;cursor:pointer">
+          <b style="font-size:.86rem;color:var(--navy);display:block;line-height:1.35">${escHtml(t.titulo)}</b>
+          <span style="font-size:.68rem;color:var(--ink-soft)">${n} examen${n===1?'':'es'}</span>
+        </button>
+        ${aps.length?`<button data-aps="${escAttr(t.id)}" aria-label="Ver apartados" style="background:none;border:0;font-size:.8rem;color:var(--ink-soft);cursor:pointer;padding:4px 6px">▾</button>`:''}
+        ${staff?`<button class="ce-del" data-ren="${escAttr(t.id)}" aria-label="Renombrar" style="background:#eef2ff;border-color:#c7d2fe">✏️</button>
+        <button class="ce-del" data-delt="${escAttr(t.id)}" aria-label="Borrar">🗑</button>`:'<span class="arrow" style="color:var(--ink-soft)">›</span>'}
+      </div>
+      ${aps.length?`<div id="aps-${escAttr(t.id)}" class="hidden" style="padding:0 12px 10px;border-top:1px dashed var(--line)">
+        <ol style="margin:8px 0 0;padding-left:18px;font-size:.74rem;color:var(--ink-soft);line-height:1.65">
+          ${aps.map(x=>`<li>${escHtml(x)}</li>`).join('')}
+        </ol></div>`:''}
+    </div>`;
+  });
+  if(sinTema){
+    h+=`<div class="aa-tema" style="border:1.5px dashed var(--line);border-radius:11px;margin-bottom:7px;background:#fbfbfd">
+      <button data-tema="__sin" style="width:100%;text-align:left;background:none;border:0;padding:9px 11px;font-family:inherit;cursor:pointer">
+        <b style="font-size:.86rem;color:var(--ink-soft);display:block">Sin tema</b>
+        <span style="font-size:.68rem;color:var(--ink-soft)">${sinTema} examen${sinTema===1?'':'es'} por colocar</span>
+      </button></div>`;
+  }
+  h+=`</div>`;
+  $('unit').innerHTML=h;
+
+  $('unit').querySelectorAll('[data-tema]').forEach(b=>{
+    b.onclick=()=>{ window._aaTema=b.dataset.tema; openUnit(unitId); };
+  });
+  $('unit').querySelectorAll('[data-aps]').forEach(b=>{
+    b.onclick=()=>{
+      const box=$('aps-'+b.dataset.aps); if(!box) return;
+      const abierto=!box.classList.contains('hidden');
+      box.classList.toggle('hidden');
+      b.textContent = abierto ? '▾' : '▴';
+    };
+  });
+  $('unit').querySelectorAll('[data-ren]').forEach(b=> b.onclick=(ev)=>{ ev.stopPropagation(); aaTemaRenombrar(unitId,b.dataset.ren); });
+  $('unit').querySelectorAll('[data-delt]').forEach(b=> b.onclick=(ev)=>{ ev.stopPropagation(); aaTemaBorrar(unitId,b.dataset.delt); });
+}
+
+async function aaTemaCrear(unitId){
+  const t=await appPrompt('Nombre del tema:','Tema '+(((window._aaTemas||[]).length)+1));
+  if(t===null||!t.trim()) return;
+  try{
+    await call('/rest/v1/rpc/aa_tema_crear',{method:'POST',body:impProf({p_unidad:unitId,p_titulo:t.trim()})});
+    await openAATemas(unitId);
+  }catch(e){ appAlert('No se pudo: '+(e.message||'')); }
+}
+async function aaTemaRenombrar(unitId, temaId){
+  const t=(window._aaTemas||[]).find(x=>String(x.id)===String(temaId));
+  const n=await appPrompt('Nuevo nombre del tema:', t?t.titulo:'');
+  if(n===null||!n.trim()) return;
+  try{
+    await call('/rest/v1/rpc/aa_tema_renombrar',{method:'POST',body:impProf({p_tema:temaId,p_titulo:n.trim()})});
+    await openAATemas(unitId);
+  }catch(e){ appAlert('No se pudo: '+(e.message||'')); }
+}
+async function aaTemaBorrar(unitId, temaId){
+  const t=(window._aaTemas||[]).find(x=>String(x.id)===String(temaId));
+  if(!await appConfirm('¿Borrar el tema "'+((t&&t.titulo)||'')+'"?\n\nLos exámenes NO se borran: pasan a "Sin tema".')) return;
+  try{
+    await call('/rest/v1/rpc/aa_tema_borrar',{method:'POST',body:impProf({p_tema:temaId})});
+    await openAATemas(unitId);
+  }catch(e){ appAlert('No se pudo: '+(e.message||'')); }
+}
+// Mover un examen a otro tema desde la pantalla del tema.
+async function aaMoverExamen(unitId, examId){
+  const temas=window._aaTemas||[];
+  const menu=temas.map((t,i)=>(i+1)+' = '+t.titulo).join('\n');
+  const r=await appPrompt('¿A qué tema lo llevamos?\nEscribe el número (0 = dejarlo sin tema):\n\n'+menu);
+  if(r===null) return;
+  const i=parseInt(r,10);
+  if(isNaN(i)||i<0||i>temas.length){ appAlert('Número no válido.'); return; }
+  const destino=i===0?null:temas[i-1].id;
+  try{
+    await call('/rest/v1/rpc/aa_examen_tema',{method:'POST',body:impProf({p_examen:examId,p_tema:destino})});
+    const ex=(examsByUnit[unitId]||[]).find(e=>e.id===examId);
+    if(ex) ex.tema_id=destino;
+    openUnit(unitId);
+  }catch(e){ appAlert('No se pudo: '+(e.message||'')); }
+}
+
 function openUnit(unitId){
+  // Aula Abierta trabaja por temas: si no hay tema elegido, primero la lista de temas.
+  if(esAulaAbierta() && !window._aaTema){ return openAATemas(unitId); }
   current.unit=unitId;
   const u=unidadesById[unitId];
   const staff=isStaff();
-  const list=(examsByUnit[unitId]||[]).filter(e=> staff || e.publicado).sort(_cmpEx);
+  const temaSel=esAulaAbierta()?window._aaTema:null;
+  const list=(examsByUnit[unitId]||[])
+    .filter(e=> staff || e.publicado)
+    .filter(e=> !temaSel || (temaSel==='__sin' ? !e.tema_id : String(e.tema_id)===String(temaSel)))
+    .sort(_cmpEx);
   showView('unit'); window.scrollTo(0,0);
   const est=unitEstado(unitId);
   const terminada = (est==='terminado' && !staff);
-  const backLabel = (current.module && current.module.unidades.length>1) ? '← '+current.module.code : (window._activeCertId==='__aula_abierta' ? '← Materias' : '← Módulos');
-  const backFn = (current.module && current.module.unidades.length>1) ? `openModule('${current.module.id}')` : (staff ? 'openModulosTeacher()' : 'goHome()');
+  const backLabel = esAulaAbierta() ? '← Temas' : ((current.module && current.module.unidades.length>1) ? '← '+current.module.code : '← Módulos');
+  const backFn = esAulaAbierta() ? `aaVolverTemas('${escAttr(unitId)}')` : ((current.module && current.module.unidades.length>1) ? `openModule('${current.module.id}')` : (staff ? 'openModulosTeacher()' : 'goHome()'));
   const head = `<button class="backbtn" onclick="${backFn}">${backLabel}</button>
     <div class="unit-head"><div class="c">${u?u.codigo:unitId.toUpperCase()}</div><div class="n">${(u&&u.titulo)?escHtml(partesMateria(u.titulo).nombre):(UF_TITULOS[unitId]||'')}${(staff && window._activeCertId==='__aula_abierta' && u)?` <button onclick="renombrarMateria('${escAttr(unitId)}')" title="Cambiar el nombre de la materia" style="background:none;border:none;cursor:pointer;font-size:.9rem;padding:0 4px;opacity:.65">✏️</button>`:''}</div></div>`;
   const posterProx = `<div class="soon-screen"><div class="soon-emoji">📭</div><div class="soon-title">Aún no hay exámenes</div><div class="soon-text">Tu profesor activará los exámenes a medida que avance el temario.<br>Vuelve pronto.</div></div>`;
@@ -7679,7 +7810,7 @@ function openUnit(unitId){
             <span class="cell-avg" style="font-size:1rem">✍️</span>
             <span class="meta"><span class="et">${escHtml(e.titulo)} <span class="rbadge">Redacción</span>${oc}</span>
             <span class="es avg-sub">Examen de redacción</span></span>
-            <span class="arrow">›</span></button>`;
+            ${esAulaAbierta()?`<button class="ce-del" data-mover="${e.id}" aria-label="Mover de tema" style="background:#eef2ff;border-color:#c7d2fe">📂</button>`:'<span class="arrow">›</span>'}</button>`;
         return;
       }
       const st=statsExamen(e.id);
@@ -7694,11 +7825,18 @@ function openUnit(unitId){
           <span class="cell-avg">${avgLabel}</span>
           <span class="meta"><span class="et">${escHtml(e.titulo)}${e.cuenta_final?' <span class="ef-badge">Nota final</span>':''}${oc}</span>
           <span class="es avg-sub">${subTxt}</span></span>
-          <span class="arrow">›</span></button>`;
+          ${esAulaAbierta()?`<button class="ce-del" data-mover="${e.id}" aria-label="Mover de tema" style="background:#eef2ff;border-color:#c7d2fe">📂</button>`:'<span class="arrow">›</span>'}</button>`;
     });
     html+=`</div>`;
+    if(esAulaAbierta()){
+      html+=`<p style="font-size:.72rem;color:var(--ink-soft);text-align:center;margin:10px 2px 0">Toca 📂 en un examen para moverlo a otro tema.</p>`;
+    }
     $('unit').innerHTML=html;
-    document.querySelectorAll('.exam-row[data-id]').forEach(b=>b.onclick=()=>openExamProfesor(b.dataset.id, unitId));
+    document.querySelectorAll('.exam-row[data-id]').forEach(b=>b.onclick=(ev)=>{
+      if(ev.target.closest('[data-mover]')) return;
+      openExamProfesor(b.dataset.id, unitId);
+    });
+    document.querySelectorAll('[data-mover]').forEach(b=> b.onclick=(ev)=>{ ev.stopPropagation(); aaMoverExamen(unitId, b.dataset.mover); });
     return;
   }
 
@@ -8242,28 +8380,18 @@ async function openRedaccion(examId){
 }
 // Visor de material del examen: overlay a pantalla completa DENTRO de la pestaña.
 // No usa target="_blank": así no oculta la pestaña y no dispara el antifraude.
-// Muestra un PDF generado con jsPDF dentro de la app en vez de descargarlo.
-// El visor incluye su propio botón de descarga por si el usuario lo quiere.
-function docVer(doc, nombre, titulo){
+// Abre un PDF generado con jsPDF en una pestaña nueva, igual que la flecha del
+// temario. El <iframe> con blob: no lo pinta Chrome en Android: sale el marcador
+// gris "PDF · Abrir". Si el navegador bloquea la pestaña, se descarga.
+function docVer(doc, nombre){
   try{
     const url=doc.output('bloburl');
-    verDocumentoPDF(url, titulo||nombre, nombre);
-  }catch(e){ try{ doc.save(nombre); }catch(_){ appAlert('No se pudo abrir el PDF.'); } }
+    const w=window.open(url,'_blank');
+    if(!w) doc.save(nombre);
+  }catch(e){
+    try{ doc.save(nombre); }catch(_){ appAlert('No se pudo abrir el PDF.'); }
+  }
 }
-function verDocumentoPDF(url, titulo, nombre){
-  if(document.getElementById('doc-overlay')) return;
-  const ov=document.createElement('div');
-  ov.id='doc-overlay';
-  ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(20,22,40,.94);display:flex;flex-direction:column;padding:10px;box-sizing:border-box';
-  ov.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;color:#fff">
-      <b style="font-size:.88rem">\u{1F4D8} ${escHtml(titulo||'Documento')}</b>
-      <button type="button" onclick="cerrarDocumentoPDF()" style="background:#fff;border:0;border-radius:9px;padding:7px 14px;font-family:inherit;font-weight:700;cursor:pointer;color:var(--navy);white-space:nowrap">\u2715 Cerrar</button>
-    </div>
-    <iframe src="${escAttr(url)}" style="flex:1;width:100%;border:0;border-radius:10px;background:#fff"></iframe>
-    <div style="margin-top:6px;text-align:center"><a href="${escAttr(url)}" download="${escAttr(nombre||'documento.pdf')}" style="color:#cbd5e1;font-size:.78rem;text-decoration:underline">Descargar el PDF</a></div>`;
-  document.body.appendChild(ov);
-}
-function cerrarDocumentoPDF(){ const ov=document.getElementById('doc-overlay'); if(ov) ov.remove(); }
 
 function verMaterialExamen(url){
   if(!url) return;
