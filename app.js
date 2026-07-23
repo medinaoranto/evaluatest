@@ -2469,7 +2469,7 @@ function saDetalle(msg){
       </div>
       ${esAA?`<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
         <button class="btn btn-honey" id="sa-aa-alta-presu" style="flex:1;margin:0;min-width:130px">📝 Alta desde presupuesto</button>
-        <button class="btn btn-ghost" id="sa-nuevo-prof" style="flex:1;margin:0;min-width:130px">Crear profesor</button>
+        <button class="btn btn-ghost" id="sa-nuevo-prof" style="flex:1;margin:0;min-width:130px">Crear usuario</button>
       </div>`:`<button class="btn btn-honey" id="sa-nuevo-prof" style="width:100%;margin-top:6px">Crear profesor</button>`}
     </div>
     ${esAA?'':saPremiumCard(a)}
@@ -6169,7 +6169,7 @@ async function ensureTemas(unidad){
   if(!unidad) return [];
   if(builder.temasCache[unidad]) return builder.temasCache[unidad];
   try{
-    const r=await call('/rest/v1/rpc/temas_de_unidad',{method:'POST',body:{p_unidad:unidad}});
+    const r=await call('/rest/v1/rpc/temas_de_unidad',{method:'POST',body:impProf({p_unidad:unidad})});
     // Ocultar del desplegable los temas técnicos: preguntas de exámenes
     // pegados/importados y fantasmas. Siguen en la BD ligadas a sus exámenes,
     // pero no alimentan el generador automático ni ensucian el selector.
@@ -6182,7 +6182,7 @@ async function ensureBank(unidad,tema){
   const k=unidad+'|'+(tema||'');
   if(builder.bankCache[k]) return builder.bankCache[k];
   const body={p_unidad:unidad}; if(tema) body.p_tema=tema;
-  try{ const r=await call('/rest/v1/rpc/preguntas_de_unidad',{method:'POST',body}); builder.bankCache[k]=r||[]; }
+  try{ const r=await call('/rest/v1/rpc/preguntas_de_unidad',{method:'POST',body:impProf(body)}); builder.bankCache[k]=r||[]; }
   catch(e){ builder.bankCache[k]=[]; }
   return builder.bankCache[k];
 }
