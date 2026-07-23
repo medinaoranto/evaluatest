@@ -2003,12 +2003,19 @@ function avAreaLabel(k){ const f=AV_AREAS.find(a=>a[0]===k); return f?f[1]:k; }
 // Un recordatorio propio SOLO lo ve su dueño (m.area) y las áreas con las que lo
 // comparte explícitamente (compartida_con). Soporte ya NO ve los de los demás.
 function avManVisibleEn(m,area){ return m.area===area || (Array.isArray(m.compartida_con)&&m.compartida_con.includes(area)); }
+// Fecha local en formato YYYY-MM-DD. OJO: toISOString() convierte a UTC y en
+// España devuelve el día anterior durante la madrugada, así que un aviso de hoy
+// nunca llegaba a vencer. No usar toISOString() para fechas de calendario.
+function fechaISOLocal(d){
+  const x=d||new Date(), p=n=>String(n).padStart(2,'0');
+  return x.getFullYear()+'-'+p(x.getMonth()+1)+'-'+p(x.getDate());
+}
 function avManualesDue(area){
   const out=[]; const hoy=new Date(); hoy.setHours(0,0,0,0);
   const jsD=hoy.getDay(); const iso=jsD===0?7:jsD;
   const monday=new Date(hoy); monday.setDate(hoy.getDate()-(iso-1));
-  const mondayStr=monday.toISOString().slice(0,10);
-  const ym=hoy.toISOString().slice(0,7); const hoyStr=hoy.toISOString().slice(0,10);
+  const mondayStr=fechaISOLocal(monday);
+  const hoyStr=fechaISOLocal(hoy); const ym=hoyStr.slice(0,7);
   (avManuales||[]).forEach(m=>{
     if(m.activo===false) return;
     if(area!=null && !avManVisibleEn(m,area)) return;
@@ -2692,7 +2699,7 @@ async function avisarAdmin(texto){
   try{
     await call('/rest/v1/avisos_manuales',{method:'POST',body:{
       area:'admin', texto:texto, repetir:'no',
-      fecha:new Date().toISOString().slice(0,10),
+      fecha:fechaISOLocal(),
       activo:true, dia_semana:null, dia_mes:null
     }});
   }catch(e){ /* nunca debe tumbar la operación */ }
@@ -2792,7 +2799,7 @@ async function avisarAdminFacturar(nombre, numeroPresu){
       area:'admin',
       texto:'💶 Facturar a "'+nombre+'"'+(numeroPresu?(' (presupuesto '+numeroPresu+')'):'')+'. Alta hecha por Soporte: ya se puede emitir la factura.',
       repetir:'no',
-      fecha:new Date().toISOString().slice(0,10),
+      fecha:fechaISOLocal(),
       activo:true, dia_semana:null, dia_mes:null
     }});
   }catch(e){ /* el alta no debe fallar por el aviso */ }
@@ -3165,7 +3172,7 @@ function rsTabCal(r){
   const list=rsPosts.filter(p=>p.estado!=='publicado')
     .sort((a,b)=>String(a.fecha_prog||'9999').localeCompare(String(b.fecha_prog||'9999')));
   if(!list.length) return `<p class="sa-empty">Nada pendiente. Escribe algo en el Redactor.</p>`;
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=fechaISOLocal();
   let h='';
   list.forEach(p=>{
     const tarde=p.fecha_prog&&p.fecha_prog<hoy;
@@ -3371,13 +3378,13 @@ const PX_ESTADOS={
 function pxEstadoReal(p){
   if(p.estado==='aceptado'||p.estado==='rechazado') return p.estado;
   const cad=pxCaducidad(p);
-  if(cad && cad < new Date().toISOString().slice(0,10)) return 'caducado';
+  if(cad && cad < fechaISOLocal()) return 'caducado';
   return p.estado||'borrador';
 }
 function pxCaducidad(p){
   if(!p.fecha) return '';
   const d=new Date(p.fecha); d.setDate(d.getDate()+(Number(p.validez_dias)||30));
-  return d.toISOString().slice(0,10);
+  return fechaISOLocal(d);
 }
 // Trazabilidad: si el presupuesto ya se convirtió en cliente, describe en cuál.
 function pxAltaLabel(p){
@@ -3431,17 +3438,30 @@ function pxPintar(){
     <button class="btn btn-ghost" onclick="pxVerArchivados(${verArch?'false':'true'})" style="flex:${verArch?'1':'0 0 auto'};margin:0">${verArch?'← Volver a los activos':'🗄 Archivados'+(nArch?(' ('+nArch+')'):'')}</button>
   </div>`;
 
-  const lista=pxLista.filter(p=>!!p.archivado===verArch);
+  const lista0=pxLista.filter(p=>!!p.archivado===verArch);
   if(!pxLista.length) return void($('teacher').innerHTML=saShell(h+`<p class="sa-empty">Todavía no hay presupuestos.</p>`));
-  if(!lista.length) return void($('teacher').innerHTML=saShell(h+`<p class="sa-empty">${verArch?'No hay presupuestos archivados.':'No hay presupuestos activos.'}</p>`));
+  if(!lista0.length) return void($('teacher').innerHTML=saShell(h+`<p class="sa-empty">${verArch?'No hay presupuestos archivados.':'No hay presupuestos activos.'}</p>`));
+
+  // Filtro por estado. El contador de cada pastilla sale de la lista visible.
+  const filtro=window._pxFiltro||'todos';
+  const cuenta={};
+  lista0.forEach(p=>{ const e=pxEstadoReal(p); cuenta[e]=(cuenta[e]||0)+1; });
+  const chip=(on)=>`background:${on?'var(--honey)':'#fff'};color:${on?'#fff':'var(--ink-soft)'};border:1.5px solid ${on?'var(--honey)':'var(--line)'};border-radius:999px;padding:5px 12px;font-size:.74rem;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;flex:0 0 auto`;
+  h+=`<div style="display:flex;gap:6px;overflow-x:auto;padding:2px 2px 10px;-webkit-overflow-scrolling:touch">
+    <button onclick="pxSetFiltro('todos')" style="${chip(filtro==='todos')}">Todos (${lista0.length})</button>
+    ${Object.entries(PX_ESTADOS).map(([k,v])=>cuenta[k]?`<button onclick="pxSetFiltro('${k}')" style="${chip(filtro===k)}">${v.lab} (${cuenta[k]})</button>`:'').join('')}
+  </div>`;
+
+  const lista=filtro==='todos'?lista0:lista0.filter(p=>pxEstadoReal(p)===filtro);
 
   if(!verArch){
-    const acep=lista.filter(p=>pxEstadoReal(p)==='aceptado');
-    const pend=lista.filter(p=>['borrador','enviado'].includes(pxEstadoReal(p)));
-    h+=`<div class="gx-kpis"><div class="gx-kpi"><span>Total</span><b>${lista.length}</b></div>
+    const acep=lista0.filter(p=>pxEstadoReal(p)==='aceptado');
+    const pend=lista0.filter(p=>['borrador','enviado'].includes(pxEstadoReal(p)));
+    h+=`<div class="gx-kpis"><div class="gx-kpi"><span>Total</span><b>${lista0.length}</b></div>
       <div class="gx-kpi"><span>Pendientes</span><b>${pend.length}</b></div>
       <div class="gx-kpi"><span>Aceptados</span><b style="color:#15803d">${gxEur(acep.reduce((t,p)=>t+Number(p.total||0),0))}</b></div></div>`;
   }
+  if(!lista.length) return void($('teacher').innerHTML=saShell(h+`<p class="sa-empty">Ningún presupuesto en este estado.</p>`));
 
   lista.forEach(p=>{
     const est=pxEstadoReal(p), e=PX_ESTADOS[est]||PX_ESTADOS.borrador;
@@ -3537,12 +3557,13 @@ async function pxArchivar(id, archivar){
     pxPintar();
   }catch(e){ appAlert('No se pudo: '+(e.message||'')); }
 }
-function pxVerArchivados(v){ window._pxArch=!!v; pxPintar(); }
+function pxSetFiltro(f){ window._pxFiltro=f; pxPintar(); }
+function pxVerArchivados(v){ window._pxArch=!!v; window._pxFiltro='todos'; pxPintar(); }
 
 function pxNuevo(){
   pxEdit={
     numero:pxNuevoNumero(),
-    fecha:new Date().toISOString().slice(0,10),
+    fecha:fechaISOLocal(),
     validez_dias:30,
     cliente:{},
     lineas:{rec:[],uni:[]},
@@ -3729,7 +3750,7 @@ async function pxGuardar(silencio){
   if(!p.cliente.razon_social || !p.cliente.nif){ appAlert('La razón social y el NIF del cliente son obligatorios: sin ellos el presupuesto no identifica a quién obliga.'); return null; }
   if(!(p.lineas.rec||[]).length && !(p.lineas.uni||[]).length){ appAlert('Añade al menos una línea al presupuesto.'); return null; }
   const body={
-    numero:p.numero, fecha:p.fecha||new Date().toISOString().slice(0,10),
+    numero:p.numero, fecha:p.fecha||fechaISOLocal(),
     validez_dias:Number(p.validez_dias)||30,
     cliente:p.cliente, lineas:p.lineas,
     subtotal:+t.subtotal.toFixed(2), descuento_pct:Number(p.descuento_pct)||0,
@@ -4670,7 +4691,7 @@ function gxDuplicar(id){
   const o=gxGastos.find(g=>String(g.id)===String(id));
   if(!o){ appAlert('No se encontró la factura.'); return; }
   gxEdit={
-    fecha:new Date().toISOString().slice(0,10),
+    fecha:fechaISOLocal(),
     proveedor_id:o.proveedor_id||null,
     numero:'',
     concepto:o.concepto||'',
@@ -4688,7 +4709,7 @@ function gxDuplicar(id){
 }
 function gxForm(){
   const g=gxEdit||{};
-  const hoy=new Date().toISOString().slice(0,10);
+  const hoy=fechaISOLocal();
   let h=`<button class="backbtn" onclick="gxSetTab('facturas')" style="margin-bottom:10px">← Gastos</button>
     <h2 style="font-size:1rem;font-weight:800;color:var(--navy);margin:2px 2px 12px">${g.id?'Editar':'Nueva'} factura de gasto</h2>`;
   h+=`<div class="gx-form">
@@ -5017,7 +5038,7 @@ async function gxRecBorrar(id){
 /* --- Aviso al abrir la app (solo admin, 1 vez al día) --- */
 async function gxAvisoInicio(){
   try{
-    const hoy=new Date().toISOString().slice(0,10);
+    const hoy=fechaISOLocal();
     if(localStorage.getItem('gx_aviso_visto')===hoy) return;
     const [g,r]=await Promise.all([
       call('/rest/v1/gastos?select=id,numero,concepto,importe,vencimiento,pagada'),
@@ -5154,7 +5175,7 @@ function saRenderFacturacion(){
         <div style="flex:1"><label style="font-size:.72rem;color:var(--ink-soft)">Inicio contrato</label><input data-df="contrato_inicio" type="date" value="${escAttr(d.contrato_inicio||'')}" style="width:100%;font-size:.82rem;padding:7px 8px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box"></div>
         <div style="flex:1"><label style="font-size:.72rem;color:var(--ink-soft)">Fin contrato</label><input data-df="contrato_fin" type="date" value="${escAttr(d.contrato_fin||'')}" style="width:100%;font-size:.82rem;padding:7px 8px;border:1px solid var(--line);border-radius:8px;box-sizing:border-box"></div>
       </div>
-      ${d.contrato_fin?`<p style="font-size:.74rem;color:${(d.contrato_fin<new Date().toISOString().slice(0,10))?'#b4232a':'var(--ink-soft)'};margin:2px 0 0">${(d.contrato_fin<new Date().toISOString().slice(0,10))?'⚠️ Contrato finalizado el '+d.contrato_fin:'Contrato vigente hasta '+d.contrato_fin}</p>`:''}
+      ${d.contrato_fin?`<p style="font-size:.74rem;color:${(d.contrato_fin<fechaISOLocal())?'#b4232a':'var(--ink-soft)'};margin:2px 0 0">${(d.contrato_fin<fechaISOLocal())?'⚠️ Contrato finalizado el '+d.contrato_fin:'Contrato vigente hasta '+d.contrato_fin}</p>`:''}
       <button class="btn btn-ghost" onclick="factGuardarDatos()" style="margin-top:4px">Guardar datos del cliente</button>
     </div>
   </details>`;
@@ -5353,7 +5374,7 @@ async function factGenerarPDF(){
   factLeerDOM();
   const f=window._fact; const d=f.datos||{};
   const numero='F-'+new Date().getFullYear()+'-'+String(Date.now()).slice(-5);
-  const fecha=new Date().toISOString().slice(0,10);
+  const fecha=fechaISOLocal();
   const r=factRenderPDF({numero,fecha,nombreCliente:f.academiaNombre,d,rec:f.rec,uni:f.uni,descuento:f.descuento,iva:f.iva,presuNumero:f.presuNumero});
   if(!r) return;
   try{
@@ -5611,7 +5632,7 @@ function factResumenPDF(){
   doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(...INK);
   doc.text('Facturas emitidas', 210-M, y, {align:'right'}); y+=8;
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...SOFT);
-  doc.text('Periodo: '+mesNom(mesSel)+'  ·  Estado: '+etFiltro+(cliSel!=='todos'?'  ·  Cliente: '+cliSel:'')+'  ·  Generado: '+new Date().toISOString().slice(0,10), M, y); y+=8;
+  doc.text('Periodo: '+mesNom(mesSel)+'  ·  Estado: '+etFiltro+(cliSel!=='todos'?'  ·  Cliente: '+cliSel:'')+'  ·  Generado: '+fechaISOLocal(), M, y); y+=8;
   doc.setDrawColor(220,220,225); doc.line(M,y,210-M,y); y+=7;
   const fila=(c1,c2,c3,c4,c5,bold)=>{ doc.setFont('helvetica',bold?'bold':'normal'); doc.setFontSize(8.5);
     doc.text(String(c1),M,y); doc.text(String(c2),60,y); doc.text(String(c3),120,y); doc.text(String(c4),150,y); doc.text(String(c5),210-M,y,{align:'right'}); y+=6; };
@@ -5693,7 +5714,7 @@ async function factRectificar(id){
   const rec=[{nombre:'RECTIFICA factura '+(fc.numero||'')+' de fecha '+(fc.fecha||''), precio:0, cant:1}, ...neg(L.rec)];
   const uni=neg(L.uni);
   const numero='R-'+new Date().getFullYear()+'-'+String(Date.now()).slice(-5);
-  const fecha=new Date().toISOString().slice(0,10);
+  const fecha=fechaISOLocal();
   const r=factRenderPDF({numero,fecha,nombreCliente:d.razon_social||'',d,rec,uni,descuento:Number(fc.descuento_pct)||0,iva:Number(fc.iva_pct)||0,presuNumero:fc.presupuesto_numero||''});
   if(!r) return;
   try{
