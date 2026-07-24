@@ -198,10 +198,14 @@ const MODULOS_ADGG0408 = [
 let aaAsigna={};   // user_id -> Set(unidad_id)
 async function cargarAsignacionesAA(){
   aaAsigna={};
+  const meter=rows=>{ (rows||[]).forEach(r=>{ (aaAsigna[r.user_id]=aaAsigna[r.user_id]||new Set()).add(r.unidad_id); }); };
+  // Por RPC: la lectura directa de alumno_materia la corta RLS y vuelve vacía sin error.
   try{
-    const rows=await call('/rest/v1/alumno_materia?select=user_id,unidad_id');
-    (rows||[]).forEach(r=>{ (aaAsigna[r.user_id]=aaAsigna[r.user_id]||new Set()).add(r.unidad_id); });
+    const rows=await call('/rest/v1/rpc/aa_asignaciones',{method:'POST',body:impProf({})});
+    if(rows && rows.length){ meter(rows); return; }
+    if(rows){ return; }   // devolvió lista vacía de verdad
   }catch(e){}
+  try{ meter(await call('/rest/v1/alumno_materia?select=user_id,unidad_id')); }catch(e){}
 }
 function aaProfActual(){
   return window._saImpersona ? window._saImpersonaProf
@@ -7292,7 +7296,7 @@ function aaChips(r){
     return `<button data-amu="${escAttr(r.id)}" data-amuni="${escAttr(u.id)}" data-amon="${on?'1':'0'}" title="${escAttr(largo+' — '+(on?'quitar de esta clase':'asignar a esta clase'))}" style="font-size:.75rem;padding:4px 9px;border-radius:999px;cursor:pointer;line-height:1.2;white-space:nowrap;flex:0 0 auto;${est}">${on?'✓ ':''}${escHtml(corto)}</button>`;
   }).join('');
   const aviso = mias.size ? '' : '<span style="font-size:.72rem;color:#b4232a;font-weight:700;white-space:nowrap">⚠️ sin clase</span>';
-  return `<div class="aa-chips"><span class="aa-chips-lb">Clases:</span>${chips}${aviso}</div>`;
+  return `<div class="aa-chips">${chips}${aviso}</div>`;
 }
 async function toggleMateriaAlumno(userIdAl, unidadId, estaba){
   const fn = estaba ? 'aa_quitar_materia' : 'aa_asignar_materia';
