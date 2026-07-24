@@ -1021,3 +1021,13 @@ select option{color:var(--navy);padding:8px;}
   .mgmt-right{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow-y:auto;padding-right:4px;}
   .mgmt-right > h2:first-child{margin-top:0;}
 }
+
+/* ---- Ficha de alumno · nombre a la izquierda y acciones arriba a la derecha ---- */
+.reg-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.reg-top .reg-info{min-width:0;flex:1 1 auto;}
+.reg-top .reg-actions{flex:0 0 auto;margin-top:2px;}
+
+/* Fila de clases: una sola línea, con scroll lateral pero sin barra visible */
+.aa-chips{display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;align-items:center;margin:10px 0 2px;scrollbar-width:none;-ms-overflow-style:none;}
+.aa-chips::-webkit-scrollbar{display:none;}
+.aa-chips-lb{font-size:.74rem;color:var(--ink-soft);font-weight:700;margin-right:2px;flex:0 0 auto;}

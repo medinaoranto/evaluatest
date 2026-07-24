@@ -7292,7 +7292,7 @@ function aaChips(r){
     return `<button data-amu="${escAttr(r.id)}" data-amuni="${escAttr(u.id)}" data-amon="${on?'1':'0'}" title="${escAttr(largo+' — '+(on?'quitar de esta clase':'asignar a esta clase'))}" style="font-size:.75rem;padding:4px 9px;border-radius:999px;cursor:pointer;line-height:1.2;white-space:nowrap;flex:0 0 auto;${est}">${on?'✓ ':''}${escHtml(corto)}</button>`;
   }).join('');
   const aviso = mias.size ? '' : '<span style="font-size:.72rem;color:#b4232a;font-weight:700;white-space:nowrap">⚠️ sin clase</span>';
-  return `<div style="display:flex;flex-wrap:nowrap;overflow-x:auto;gap:6px;align-items:center;margin:8px 0 4px;padding-bottom:2px"><span style="font-size:.74rem;color:var(--ink-soft);font-weight:700;margin-right:2px;flex:0 0 auto">Clases:</span>${chips}${aviso}</div>`;
+  return `<div class="aa-chips"><span class="aa-chips-lb">Clases:</span>${chips}${aviso}</div>`;
 }
 async function toggleMateriaAlumno(userIdAl, unidadId, estaba){
   const fn = estaba ? 'aa_quitar_materia' : 'aa_asignar_materia';
@@ -7317,19 +7317,21 @@ function regBody(rows,errMsg,okMsg){
     const act = r.con_actividad ? `<span class="reg-tag act">Con actividad</span>` : `<span class="reg-tag none">Sin actividad</span>`;
     const nombre = r.nombre && r.nombre!==r.email ? escHtml(r.nombre) : '';
     h+=`<div class="reg-row">
-      <div class="reg-info">
-        ${nombre?`<b>${nombre}</b>`:''}
-        <span class="reg-mail">${escHtml(r.email)}</span>
-        <span class="reg-badges">${badge}${act}</span>
+      <div class="reg-top">
+        <div class="reg-info">
+          ${nombre?`<b>${nombre}</b>`:''}
+          <span class="reg-mail">${escHtml(r.email)}</span>
+          <span class="reg-badges">${badge}${act}</span>
+        </div>
+        <div class="reg-actions">
+          <button class="reg-ico" title="Nueva contraseña" aria-label="Nueva contraseña" data-pass="${r.id}" data-email="${escHtml(r.email)}">🔑</button>
+          ${r.autorizado
+            ? `<button class="reg-ico danger" title="Revocar acceso" aria-label="Revocar acceso" data-revoke="${escHtml(r.email)}">🚫</button>`
+            : `<button class="reg-ico ok" title="Autorizar de nuevo" aria-label="Autorizar de nuevo" data-reauth="${escHtml(r.email)}" data-nombre="${escHtml(r.nombre||'')}">✅</button>`}
+          <button class="reg-ico danger" title="Borrar cuenta" aria-label="Borrar cuenta" data-borrar="${r.id}" data-email="${escHtml(r.email)}">🗑</button>
+        </div>
       </div>
       ${aaChips(r)}
-      <div class="reg-actions" style="display:flex;flex-wrap:nowrap;gap:8px;align-items:center">
-        <button class="reg-ico" title="Nueva contraseña" aria-label="Nueva contraseña" data-pass="${r.id}" data-email="${escHtml(r.email)}">🔑</button>
-        ${r.autorizado
-          ? `<button class="reg-ico danger" title="Revocar acceso" aria-label="Revocar acceso" data-revoke="${escHtml(r.email)}">🚫</button>`
-          : `<button class="reg-ico ok" title="Autorizar de nuevo" aria-label="Autorizar de nuevo" data-reauth="${escHtml(r.email)}" data-nombre="${escHtml(r.nombre||'')}">✅</button>`}
-        <button class="reg-ico danger" title="Borrar cuenta" aria-label="Borrar cuenta" data-borrar="${r.id}" data-email="${escHtml(r.email)}">🗑</button>
-      </div>
     </div>`;
   });
   return h;
