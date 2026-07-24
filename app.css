@@ -963,9 +963,14 @@ select option{color:var(--navy);padding:8px;}
 .gx-filtros select,.gx-filtros input{padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:.8rem;background:#fff;font-family:inherit;min-width:0;}
 .gx-filtros select,.gx-form select{-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b6b76' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;background-size:14px;padding-right:30px;}
 /* Corrección con IA: texto del alumno en negro, correcciones en rojo y a mano */
-.ia-prev{border:1.5px solid var(--line);border-radius:12px;background:#fff;padding:16px;font-size:.9rem;line-height:1.9;white-space:pre-wrap;min-height:80px;}
-.ia-corr{font-family:'Caveat',cursive;font-size:1.28em;font-weight:700;color:#d31d24;line-height:1;}
-.ia-nota{font-family:'Caveat',cursive;font-size:2rem;font-weight:700;color:#d31d24;text-align:right;display:block;margin-top:10px;}
+.ia-prev{border:1.5px solid var(--line);border-radius:12px;background:#fff;padding:16px;font-size:.9rem;line-height:1.9;min-height:80px;}
+.ia-bloque{margin-bottom:22px;}
+.ia-bloque:last-of-type{margin-bottom:6px;}
+.ia-rot{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--ink-soft);margin:0 0 8px;padding-bottom:5px;border-bottom:1px solid var(--line);}
+.ia-alum{white-space:pre-wrap;line-height:1.85;color:var(--ink);}
+.ia-corr{font-family:'Caveat',cursive;font-size:1.3em;font-weight:700;color:var(--navy);line-height:1.5;white-space:pre-wrap;margin:0 0 14px;}
+.ia-corr:last-child{margin-bottom:0;}
+.ia-nota{font-family:'Caveat',cursive;font-size:2rem;font-weight:700;color:var(--navy);text-align:right;display:block;margin-top:14px;}
 .gx-tabla-wrap{overflow-x:auto;border:1.5px solid var(--line);border-radius:12px;background:#fff;}
 .gx-tabla{width:100%;border-collapse:collapse;font-size:.78rem;}
 .gx-tabla th{background:#f6f1e6;text-align:left;padding:9px 10px;font-weight:800;color:var(--ink-soft);font-size:.7rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;}

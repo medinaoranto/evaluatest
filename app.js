@@ -6973,7 +6973,15 @@ function pintarCorreccion(txt, nota){
   let t=String(txt||'');
   const m=t.match(/NOTA:\s*([\d.,]+)\s*\/\s*10/i);
   if(m) t=t.replace(m[0],'').trim();
-  let html=escHtml(t).replace(/\[\[([\s\S]*?)\]\]/g,'<span class="ia-corr">$1</span>');
+  // Se separa lo que escribió el alumno de lo que anotó el profesor: arriba su
+  // respuesta limpia, debajo la corrección. Nada de rojo sobre el texto del alumno.
+  const notas=[];
+  t.replace(/\[\[([\s\S]*?)\]\]/g,(_,c)=>{ const v=String(c).trim(); if(v) notas.push(v); return ''; });
+  const alumno=t.replace(/\[\[[\s\S]*?\]\]/g,'').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+  let html='';
+  if(alumno) html+=`<div class="ia-bloque"><div class="ia-rot">Tu respuesta</div><div class="ia-alum">${escHtml(alumno)}</div></div>`;
+  if(notas.length) html+=`<div class="ia-bloque"><div class="ia-rot">Corrección</div>${notas.map(n=>`<p class="ia-corr">${escHtml(n)}</p>`).join('')}</div>`;
+  if(!html) html='';
   if(nota!=null&&nota!==''&&!isNaN(nota)) html+=`<span class="ia-nota">${nota}/10</span>`;
   return html;
 }
