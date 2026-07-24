@@ -6348,7 +6348,7 @@ function temaLabelGlobal(t){
 
 async function openExamMgmt(){
   const units=unidadesParaCrearExamen();
-  builder={mode:'auto',kind:'test',unidad:units[0]||'',titulo:'',nivel:'medio',n:15,tema:'',items:[],redItems:[{enun:'',file:null,matName:'',matMode:'inline'}],adding:false,picking:false,bankTema:'',temasCache:{},bankCache:{},cuentaFinal:false,examFile:null,examMatName:'',examMatMode:'inline'};
+  builder={mode:'auto',kind:'test',unidad:units[0]||'',titulo:'',nivel:'medio',n:15,tema:'',items:[],redItems:[{enun:'',file:null,matName:'',matMode:'inline'}],adding:false,picking:false,bankTema:'',temasCache:{},bankCache:{},cuentaFinal:false,examFile:null,examMatName:'',examMatMode:'inline',redPicking:false,redBank:[],redBankTema:'',redBankUnidad:''};
   showView('teacher'); window.scrollTo(0,0);
   if(builder.unidad) await ensureTemas(builder.unidad);
   renderExamMgmt();
@@ -6356,6 +6356,10 @@ async function openExamMgmt(){
 
 function renderExamMgmt(okMsg,errMsg){
   const units=unidadesParaCrearExamen();
+  // La unidad guardada puede no pertenecer al certificado activo (cambio de módulo,
+  // unidad borrada...). Si no está en la lista, ningún <option> queda marcado: el
+  // desplegable enseñaría la primera y el examen se crearía en la unidad vieja.
+  if(units.length && units.indexOf(builder.unidad)<0) builder.unidad=units[0];
   if(!builder.unidad && units.length) builder.unidad=units[0];
   const uOpts=units.map(u=>`<option value="${u}"${u===builder.unidad?' selected':''}>${unidadesById[u]?unidadesById[u].codigo+' · '+tituloMateria(unidadesById[u]):u}</option>`).join('');
   const temas=builder.temasCache[builder.unidad]||[];
@@ -6373,6 +6377,7 @@ function renderExamMgmt(okMsg,errMsg){
   if(builder.kind==='redaccion'){
     h.push('<div class="mgmt-2col"><div class="mgmt-left">');
         h.push('<div class="t-card"><label style="margin-top:6px">Unidad</label><select id="ce-unidad">'+uOpts+'</select><label>Título del examen</label><input id="ce-titulo" type="text" placeholder="Ej.: Examen de redacción" value="'+escAttr(builder.titulo)+'"><label>Nivel</label><select id="ce-nivel"><option value="medio"'+(builder.nivel==='medio'?' selected':'')+'>Medio</option><option value="alto"'+(builder.nivel==='alto'?' selected':'')+'>Alto</option></select><label class="ckrow" style="margin-top:12px"><input type="checkbox" id="ce-final"'+(builder.cuentaFinal?' checked':'')+'>  Cuenta para la nota final</label><label style="margin-top:14px;font-size:.72rem;color:var(--ink-soft)">PDF del examen (opcional, p.ej. un mapa)'+(builder.examMatName?' · <b>📎 '+escHtml(builder.examMatName)+'</b>':'')+'</label><input id="ce-mat-file" type="file" accept="application/pdf" style="font-size:.75rem"><div style="font-size:.68rem;color:var(--ink-soft);margin-top:4px">Se mostrará incrustado en la pantalla del alumno.</div></div>');
+    h.push(`<div style="font-size:.74rem;color:var(--ink-soft);margin:8px 2px 0">Se creará en <b>${escHtml(unidadesById[builder.unidad]?unidadesById[builder.unidad].codigo+' · '+tituloMateria(unidadesById[builder.unidad]):(builder.unidad||'—'))}</b>.</div>`);
     h.push(renderRedSection());
     h.push('</div><div class="mgmt-right">');
     h.push(`<h2 style="font-size:.78rem;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:1px;margin:18px 2px 12px">Exámenes creados por el profesorado</h2>`);
@@ -6531,6 +6536,8 @@ async function openRedPicker(){
   renderExamMgmt();
   setTimeout(()=>{ const el=document.querySelector('.rbk-list'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); },50);
 }
+// Quita el "13. " inicial del enunciado: la lista ya pone su propio número.
+function sinNumeroInicial(t){ return String(t||'').replace(/^\s*\d+\s*[.)-]\s*/,''); }
 function renderRedBankPicker(){
   const banco=builder.redBank||[];
   const bloques=[]; banco.forEach(q=>{ const t=q.tema||'Sin bloque'; if(bloques.indexOf(t)<0) bloques.push(t); });
@@ -6542,16 +6549,23 @@ function renderRedBankPicker(){
   h.push(`<label style="margin-top:6px">Banco de actividades</label>`);
   h.push(`<select id="rbk-tema">${opts}</select>`);
   if(!lista.length) h.push(`<p class="sa-empty" style="font-size:.82rem;margin-top:10px">No hay actividades de redacción en el banco de esta unidad.</p>`);
-  lista.forEach(q=>{
-    const txt=String(q.enunciado||'');
-    const titulo=txt.split('\n')[0];
-    const resto=txt.slice(titulo.length).trim();
-    const ya=puestos.indexOf(txt.trim())>=0;
-    h.push(`<label style="display:flex;gap:9px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-top:8px;${ya?'opacity:.45':''}">
-      <input type="checkbox" name="rbk-pick" value="${q.id}"${ya?' disabled':''} style="margin-top:4px;flex:0 0 auto">
-      <span style="min-width:0"><b style="font-size:.86rem">${escHtml(titulo)}</b>${resto?`<br><span style="font-size:.76rem;color:var(--ink-soft)">${escHtml(resto.length>140?resto.slice(0,140)+'…':resto)}</span>`:''}<br><span style="font-size:.68rem;color:${q.explicacion?'#1c7a44':'#b4232a'}">${q.explicacion?'✔ con respuesta modelo':'sin respuesta modelo'}</span></span>
-    </label>`);
-  });
+  else{
+    h.push(`<div class="bk-list">`);
+    lista.forEach(q=>{
+      const txt=String(q.enunciado||'');
+      const titulo=sinNumeroInicial(txt.split('\n')[0]);
+      const resto=txt.slice(txt.split('\n')[0].length).trim();
+      const ya=puestos.indexOf(txt.trim())>=0;
+      const num=banco.indexOf(q)+1;
+      h.push(`<label class="bk-row"${ya?' style="opacity:.45"':''}>`
+        +`<input type="checkbox" name="rbk-pick" value="${q.id}"${ya?' disabled':''}>`
+        +`<span><b>${num}. ${escHtml(titulo)}</b>`
+        +(resto?`<br><span style="color:var(--ink-soft)">${escHtml(resto.length>140?resto.slice(0,140)+'…':resto)}</span>`:'')
+        +`<br><span style="font-size:.7rem;color:${q.explicacion?'#1c7a44':'#b4232a'}">${q.explicacion?'✔ con respuesta modelo':'sin respuesta modelo'}</span></span>`
+        +`</label>`);
+    });
+    h.push(`</div>`);
+  }
   h.push(`<div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-ghost" id="rbk-cancel" style="flex:1">Cancelar</button><button class="btn btn-honey" id="rbk-add" style="flex:1">Añadir seleccionadas</button></div>`);
   h.push(`</div>`);
   return h.join('');
@@ -6640,7 +6654,7 @@ function renderBuilderSection(temas){
   } else if(builder.picking){
     const bank=builder.bankCache[builder.unidad+'|'+(builder.bankTema||'')]||[];
     const tOpts=`<option value="">Todos los temas</option>`+temas.map(t=>`<option value="${escAttr(t.tema)}"${t.tema===builder.bankTema?' selected':''}>${escHtml(temaLabelGlobal(t))} (${t.n})</option>`).join('');
-    const rows=bank.length?bank.map(q=>{ const already=builder.items.some(it=>it.tipo==='banco'&&it.id===q.id); return `<label class="bk-row"><input type="checkbox" name="bk-pick" value="${q.id}"${already?' checked disabled':''}><span>${escHtml(q.enunciado)}</span></label>`; }).join(''):`<div class="bld-empty">No hay preguntas para ese tema.</div>`;
+    const rows=bank.length?bank.map((q,qi)=>{ const already=builder.items.some(it=>it.tipo==='banco'&&it.id===q.id); return `<label class="bk-row"><input type="checkbox" name="bk-pick" value="${q.id}"${already?' checked disabled':''}><span><b>${qi+1}.</b> ${escHtml(sinNumeroInicial(q.enunciado))}</span></label>`; }).join(''):`<div class="bld-empty">No hay preguntas para ese tema.</div>`;
 h.push(`<div class="bld-form"><label style="margin-top:4px">Tema del banco</label><select id="bk-tema">${tOpts}</select><div class="bk-list">${rows}</div><div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-ghost" id="bk-cancel" style="flex:1">Cancelar</button><button class="btn btn-primary" id="bk-add" style="flex:1">Añadir seleccionadas</button></div></div>`);
   } else {
     h.push(`<div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-ghost" id="bld-new" style="flex:1">✏️ Pregunta nueva</button><button class="btn btn-ghost" id="bld-bank" style="flex:1">📋 Del banco</button></div>`);
